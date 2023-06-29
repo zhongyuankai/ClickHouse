@@ -37,6 +37,8 @@ struct StorageInMemoryMetadata
     /// ORDER BY expression. Required field for all MergeTree tables
     /// even in old syntax MergeTree(partition_key, order_by, ...)
     KeyDescription sorting_key;
+    /// Supported for MergeTree only.
+    KeyDescription unique_key;
     /// SAMPLE BY expression. Supported for MergeTree only.
     KeyDescription sampling_key;
     /// Separate ttl expressions for columns
@@ -223,6 +225,7 @@ struct StorageInMemoryMetadata
     /// Returns columns names in sorting key specified by. For example: 'a', 'x
     /// * y', 'toStartOfMonth(date)', etc.
     Names getPrimaryKeyColumns() const;
+    Names getUniqueKeyColumns() const;
 
     /// Storage settings
     ASTPtr getSettingsChanges() const;

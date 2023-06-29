@@ -809,11 +809,13 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     MergeTreeRangeReader * prev_reader_,
     const PrewhereExprStep * prewhere_info_,
     bool last_reader_in_chain_,
-    const Names & non_const_virtual_column_names_)
+    const Names & non_const_virtual_column_names_,
+    PartBitmap::Ptr unique_bitmap_)
     : merge_tree_reader(merge_tree_reader_)
     , index_granularity(&(merge_tree_reader->data_part_info_for_read->getIndexGranularity()))
     , prev_reader(prev_reader_)
     , prewhere_info(prewhere_info_)
+    , unique_bitmap(unique_bitmap_)
     , last_reader_in_chain(last_reader_in_chain_)
     , is_initialized(true)
 {
@@ -1413,6 +1415,26 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
     result.columns.reserve(block.columns());
     for (auto & col : block)
         result.columns.emplace_back(std::move(col.column));
+
+//    if (unique_bitmap)
+//    {
+//        LOG_INFO(&Poco::Logger::root(), "unique: {}", unique_bitmap->toString());
+//        MutableColumnPtr filter_column = DataTypeUInt8().createColumn();
+//        auto & filter_column_data = typeid_cast<ColumnUInt8 &>(*filter_column).getData();
+//        filter_column_data.resize_fill(result.num_rows, 0);
+//        const auto & unique_id_column = typeid_cast<const ColumnUInt32 &>(*result.columns[prewhere_column_pos]).getData();
+//        for (size_t idx = 0; idx < result.num_rows; ++idx)
+//        {
+//            UInt32 key_id = unique_id_column[idx];
+//            if (key_id != 0 && unique_bitmap->bitmap->rb_contains(key_id))
+//                {
+//                filter_column_data[idx] = 1;
+//                }
+//        }
+//
+//        current_step_filter = std::move(filter_column);
+//        combined_filter = current_step_filter;
+//    }
 
     if (prewhere_info->type == PrewhereExprStep::Filter)
     {

@@ -850,7 +850,7 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
                         "Sign column for MergeTree cannot be specified "
                         "in modes except Collapsing or VersionedCollapsing.");
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
+    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing && mode != MergingParams::Unique)
         throw Exception(ErrorCodes::LOGICAL_ERROR,
                         "Version column for MergeTree cannot be specified "
                         "in modes except Replacing or VersionedCollapsing.");
@@ -1116,6 +1116,7 @@ String MergeTreeData::MergingParams::getModeName() const
         case Replacing:     return "Replacing";
         case Graphite:      return "Graphite";
         case VersionedCollapsing: return "VersionedCollapsing";
+        case Unique:        return "Unique";
     }
 
     UNREACHABLE();

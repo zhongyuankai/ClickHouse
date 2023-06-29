@@ -7,6 +7,7 @@
 #include <Storages/MergeTree/MarkRange.h>
 #include "Storages/MergeTree/AlterConversions.h"
 #include "Storages/MergeTree/MergeTreePartInfo.h"
+#include <Storages/MergeTree/PartBitmap.h>
 
 
 namespace DB
@@ -45,6 +46,7 @@ struct RangesInDataPart
     AlterConversionsPtr alter_conversions;
     size_t part_index_in_query;
     MarkRanges ranges;
+    PartBitmap::Ptr unique_bitmap;
 
     RangesInDataPart() = default;
 
@@ -52,11 +54,13 @@ struct RangesInDataPart
         const DataPartPtr & data_part_,
         const AlterConversionsPtr & alter_conversions_,
         const size_t part_index_in_query_,
-        const MarkRanges & ranges_ = MarkRanges{})
+        const MarkRanges & ranges_ = MarkRanges{},
+        PartBitmap::Ptr unique_bitmap_ = nullptr)
         : data_part{data_part_}
         , alter_conversions{alter_conversions_}
         , part_index_in_query{part_index_in_query_}
         , ranges{ranges_}
+        , unique_bitmap(unique_bitmap_)
     {}
 
     RangesInDataPartDescription getDescription() const;

@@ -106,7 +106,7 @@ namespace ErrorCodes
 }
 
 static MergeTreeReaderSettings getMergeTreeReaderSettings(
-    const ContextPtr & context, const SelectQueryInfo & query_info)
+    const ContextPtr & context, const SelectQueryInfo & query_info, const MergeTreeData::MergingParams & merging_params)
 {
     const auto & settings = context->getSettingsRef();
     return
@@ -116,6 +116,7 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(
         .checksum_on_read = settings.checksum_on_read,
         .read_in_order = query_info.input_order_info != nullptr,
         .apply_deleted_mask = settings.apply_deleted_mask,
+        .apply_unique_key = merging_params.mode == MergeTreeData::MergingParams::Unique,
         .use_asynchronous_read_from_pool = settings.allow_asynchronous_read_from_io_pool_for_merge_tree
             && (settings.max_streams_to_max_threads_ratio > 1 || settings.max_streams_for_merge_tree_reading > 1),
         .enable_multiple_prewhere_read_steps = settings.enable_multiple_prewhere_read_steps,
@@ -257,7 +258,7 @@ ReadFromMergeTree::ReadFromMergeTree(
         getPrewhereInfoFromQueryInfo(query_info_),
         data_.getPartitionValueType(),
         virt_column_names_)})
-    , reader_settings(getMergeTreeReaderSettings(context_, query_info_))
+    , reader_settings(getMergeTreeReaderSettings(context_, query_info_, data_.merging_params))
     , prepared_parts(std::move(parts_))
     , alter_conversions_for_parts(std::move(alter_conversions_))
     , real_column_names(std::move(real_column_names_))
@@ -922,7 +923,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
                 }
 
                 ranges_to_get_from_part = split_ranges(ranges_to_get_from_part, input_order_info->direction);
-                new_parts.emplace_back(part.data_part, part.alter_conversions, part.part_index_in_query, std::move(ranges_to_get_from_part));
+                new_parts.emplace_back(part.data_part, part.alter_conversions, part.part_index_in_query, std::move(ranges_to_get_from_part), part.unique_bitmap);
             }
 
             splitted_parts_and_ranges.emplace_back(std::move(new_parts));
@@ -1034,6 +1035,10 @@ static void addMergingFinal(
             case MergeTreeData::MergingParams::Graphite:
                 return std::make_shared<GraphiteRollupSortedTransform>(header, num_outputs,
                             sort_description, max_block_size_rows, /*max_block_size_bytes=*/0, merging_params.graphite_params, now);
+
+            case MergeTreeData::MergingParams::Unique:
+                return std::make_shared<MergingSortedTransform>(header, num_outputs,
+                            sort_description, max_block_size_rows, /*max_block_size_bytes=*/0, SortingQueueStrategy::Batch);
         }
 
         UNREACHABLE();
@@ -1588,7 +1593,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToReadImpl(
             total_marks_pk += part->index_granularity.getMarksCountWithoutFinal();
         parts_before_pk = parts.size();
 
-        auto reader_settings = getMergeTreeReaderSettings(context, query_info);
+        auto reader_settings = getMergeTreeReaderSettings(context, query_info, data.merging_params);
 
         result.parts_with_ranges = MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(
             std::move(parts),
@@ -1608,6 +1613,43 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToReadImpl(
         return std::make_shared<MergeTreeDataSelectAnalysisResult>(MergeTreeDataSelectAnalysisResult{.result = std::current_exception()});
     }
 
+    /// merge bitmap
+    PartBitmapsVector bitmaps;
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Unique){
+        const String * prev_partition_id = nullptr;
+        MergeTreeData::DataPartsVector partition_parts;
+        MergeTreeData::DataPartsVector partition_select_parts;
+        PartBitmapsVector partition_bitmaps;
+        MergeTreeDataUniquePtr data_unique = data.getMergeTreeDataUnique();
+
+        auto merge_partition_parts = [&]() {
+            assert(partition_parts.size() >= partition_select_parts.size());
+            partition_select_parts.insert(partition_select_parts.end(), partition_parts.begin(), partition_parts.end());
+            data_unique->mergePartitionPartBitmaps(partition_parts, partition_select_parts, partition_bitmaps);
+            bitmaps.insert(bitmaps.end(), partition_bitmaps.begin(), partition_bitmaps.end());
+            partition_bitmaps.clear();
+            partition_parts.clear();
+            partition_select_parts.clear();
+        };
+
+
+        for (size_t i = 0; i < parts.size(); ++i)
+        {
+            const auto & part = parts[i];
+            if (prev_partition_id == nullptr)
+                prev_partition_id = &part->info.partition_id;
+
+            if (*prev_partition_id != part->info.partition_id)
+                merge_partition_parts();
+
+            partition_parts.push_back(part);
+        }
+
+        merge_partition_parts();
+    }
+
+    assert(parts.size() == bitmaps.size());
+
     size_t sum_marks_pk = total_marks_pk;
     for (const auto & stat : result.index_stats)
         if (stat.type == IndexType::PrimaryKey)
@@ -1617,8 +1659,11 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToReadImpl(
     size_t sum_ranges = 0;
     size_t sum_rows = 0;
 
-    for (const auto & part : result.parts_with_ranges)
+    for (auto & part : result.parts_with_ranges)
     {
+        if (!bitmaps.empty())
+            part.unique_bitmap = bitmaps[part.part_index_in_query];
+
         sum_ranges += part.ranges.size();
         sum_marks += part.getMarksCount();
         sum_rows += part.getRowsCount();

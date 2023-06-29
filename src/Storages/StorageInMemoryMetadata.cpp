@@ -35,6 +35,7 @@ StorageInMemoryMetadata::StorageInMemoryMetadata(const StorageInMemoryMetadata &
     , partition_key(other.partition_key)
     , primary_key(other.primary_key)
     , sorting_key(other.sorting_key)
+    , unique_key(other.unique_key)
     , sampling_key(other.sampling_key)
     , column_ttls_by_name(other.column_ttls_by_name)
     , table_ttl(other.table_ttl)
@@ -61,6 +62,7 @@ StorageInMemoryMetadata & StorageInMemoryMetadata::operator=(const StorageInMemo
     partition_key = other.partition_key;
     primary_key = other.primary_key;
     sorting_key = other.sorting_key;
+    unique_key = other.unique_key;
     sampling_key = other.sampling_key;
     column_ttls_by_name = other.column_ttls_by_name;
     table_ttl = other.table_ttl;
@@ -465,6 +467,13 @@ Names StorageInMemoryMetadata::getPrimaryKeyColumns() const
 {
     if (!primary_key.column_names.empty())
         return primary_key.column_names;
+    return {};
+}
+
+Names StorageInMemoryMetadata::getUniqueKeyColumns() const
+{
+    if (!unique_key.column_names.empty())
+        return unique_key.column_names;
     return {};
 }
 

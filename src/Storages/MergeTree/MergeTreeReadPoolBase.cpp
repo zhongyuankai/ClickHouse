@@ -47,6 +47,7 @@ void MergeTreeReadPoolBase::fillPerPartInfos()
         MergeTreeReadTask::Info read_task_info;
 
         read_task_info.data_part = part_with_ranges.data_part;
+        read_task_info.unique_bitmap = part_with_ranges.unique_bitmap;
         read_task_info.part_index_in_query = part_with_ranges.part_index_in_query;
         read_task_info.alter_conversions = part_with_ranges.alter_conversions;
 

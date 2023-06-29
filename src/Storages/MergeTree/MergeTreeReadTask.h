@@ -58,6 +58,8 @@ public:
     {
         /// Data part which should be read while performing this task
         DataPartPtr data_part;
+        /// Use only UniqueMergerTree
+        PartBitmap::Ptr unique_bitmap;
         /// For virtual `part_index` virtual column
         size_t part_index_in_query;
         /// Alter converversionss that should be applied on-fly for part.

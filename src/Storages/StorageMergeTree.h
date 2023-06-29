@@ -14,6 +14,7 @@
 #include <Storages/MergeTree/FutureMergedMutatedPart.h>
 #include <Storages/MergeTree/MergePlainMergeTreeTask.h>
 #include <Storages/MergeTree/MutatePlainMergeTreeTask.h>
+#include <Storages/MergeTree/MergeTreeDataUnique.h>
 
 #include <Disks/StoragePolicy.h>
 #include <Common/SimpleIncrement.h>
@@ -117,6 +118,8 @@ public:
 
     MergeTreeDeduplicationLog * getDeduplicationLog() { return deduplication_log.get(); }
 
+    MergeTreeDataUniquePtr getMergeTreeDataUnique() const override { return data_unique; }
+
 private:
 
     /// Mutex and condvar for synchronous mutations wait
@@ -126,6 +129,7 @@ private:
     MergeTreeDataSelectExecutor reader;
     MergeTreeDataWriter writer;
     MergeTreeDataMergerMutator merger_mutator;
+    MergeTreeDataUniquePtr data_unique;
 
     std::unique_ptr<MergeTreeDeduplicationLog> deduplication_log;
 

@@ -109,6 +109,7 @@ StorageMergeTree::StorageMergeTree(
     , reader(*this)
     , writer(*this)
     , merger_mutator(*this)
+    , data_unique(std::make_shared<MergeTreeDataUnique>(*this))
 {
     initializeDirectoriesAndFormatVersion(relative_data_path_, attach, date_column_name);
 

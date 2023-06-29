@@ -27,6 +27,8 @@ struct MergeTreeReaderSettings
     bool read_in_order = false;
     /// Deleted mask is applied to all reads except internal select from mutate some part columns.
     bool apply_deleted_mask = true;
+    /// Only for unique merge tree, the unique key id should be used to deduplicate
+    bool apply_unique_key = false;
     /// Put reading task in a common I/O pool, return Async state on prepare()
     bool use_asynchronous_read_from_pool = false;
     /// If PREWHERE has multiple conditions combined with AND, execute them in separate read/filtering steps.

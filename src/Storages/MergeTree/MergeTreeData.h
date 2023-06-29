@@ -67,6 +67,8 @@ class MergeTreeTransaction;
 using MergeTreeTransactionPtr = std::shared_ptr<MergeTreeTransaction>;
 
 struct WriteSettings;
+class MergeTreeDataUnique;
+using MergeTreeDataUniquePtr = std::shared_ptr<MergeTreeDataUnique>;
 
 /// Auxiliary struct holding information about the future merged or mutated part.
 struct EmergingPartInfo
@@ -338,6 +340,7 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
+            Unique              = 8,
         };
 
         Mode mode;
@@ -554,6 +557,8 @@ public:
     /// Get min value of part->info.getDataVersion() for all active parts.
     /// Makes sense only for ordinary MergeTree engines because for them block numbering doesn't depend on partition.
     std::optional<Int64> getMinPartDataVersion() const;
+
+    virtual MergeTreeDataUniquePtr getMergeTreeDataUnique() const { return nullptr; }
 
     /// Returns all detached parts
     DetachedPartsInfo getDetachedParts() const;

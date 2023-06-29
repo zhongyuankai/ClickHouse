@@ -456,6 +456,7 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_partition_by("PARTITION BY");
     ParserKeyword s_primary_key("PRIMARY KEY");
     ParserKeyword s_order_by("ORDER BY");
+    ParserKeyword s_unique_key("Unique KEY");
     ParserKeyword s_sample_by("SAMPLE BY");
     ParserKeyword s_ttl("TTL");
     ParserKeyword s_settings("SETTINGS");
@@ -470,6 +471,7 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr partition_by;
     ASTPtr primary_key;
     ASTPtr order_by;
+    ASTPtr unique_key;
     ASTPtr sample_by;
     ASTPtr ttl_table;
     ASTPtr settings;
@@ -513,6 +515,17 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!order_by && s_order_by.ignore(pos, expected))
         {
             if (expression_p.parse(pos, order_by, expected))
+            {
+                storage_like = true;
+                continue;
+            }
+            else
+                return false;
+        }
+
+        if (!unique_key && s_unique_key.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, unique_key, expected))
             {
                 storage_like = true;
                 continue;
@@ -579,6 +592,7 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     storage->set(storage->partition_by, partition_by);
     storage->set(storage->primary_key, primary_key);
     storage->set(storage->order_by, order_by);
+    storage->set(storage->unique_key, unique_key);
     storage->set(storage->sample_by, sample_by);
     storage->set(storage->ttl_table, ttl_table);
     storage->set(storage->settings, settings);

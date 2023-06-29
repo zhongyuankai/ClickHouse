@@ -8,6 +8,7 @@
 #include <Storages/MergeTree/FutureMergedMutatedPart.h>
 #include <Storages/MergeTree/ColumnSizeEstimator.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
+#include <Storages/MergeTree/MergeTreeDataUnique.h>
 #include <Processors/Transforms/ColumnGathererTransform.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
 #include <QueryPipeline/QueryPipeline.h>
@@ -167,6 +168,7 @@ private:
         std::unique_ptr<PullingPipelineExecutor> merging_executor;
 
         MergeTreeData::MutableDataPartPtr new_data_part{nullptr};
+        PartBitmap::MutablePtr new_unique_bitmap{nullptr};
 
         /// If lightweight delete mask is present then some input rows are filtered out right after reading.
         std::shared_ptr<std::atomic<size_t>> input_rows_filtered{std::make_shared<std::atomic<size_t>>(0)};
