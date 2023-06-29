@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
+#include <Storages/MergeTree/MergeTreeDataUnique.h>
 #include <Storages/MergeTree/DataPartStorageOnDisk.h>
 #include <Columns/ColumnConst.h>
 #include <Common/HashTable/HashMap.h>
@@ -242,6 +243,8 @@ Block MergeTreeDataWriter::mergeBlock(
             case MergeTreeData::MergingParams::Graphite:
                 return std::make_shared<GraphiteRollupSortedAlgorithm>(
                     block, 1, sort_description, block_size + 1, merging_params.graphite_params, time(nullptr));
+            case MergeTreeData::MergingParams::Unique:
+                return nullptr;
         }
 
         UNREACHABLE();
@@ -439,6 +442,11 @@ MergeTreeDataWriter::TemporaryPart MergeTreeDataWriter::writeTempPart(
         updateTTL(ttl_entry, new_data_part->ttl_infos, new_data_part->ttl_infos.recompression_ttl[ttl_entry.result_column], block, false);
 
     new_data_part->ttl_infos.update(move_ttl_infos);
+
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        data.getMergeTreeDataUnique()->update(new_data_part, block, metadata_snapshot);
+    }
 
     /// This effectively chooses minimal compression method:
     ///  either default lz4 or compression method with zero thresholds on absolute and relative part size.

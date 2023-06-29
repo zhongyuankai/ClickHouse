@@ -179,6 +179,8 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         merging_params.mode = MergeTreeData::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
         merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
+    else if (name_part == "Unique")
+        merging_params.mode = MergeTreeData::MergingParams::Unique;
     else if (!name_part.empty())
         throw Exception(
             "Unknown storage " + args.engine_name + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::UNKNOWN_STORAGE);
@@ -247,6 +249,8 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             add_mandatory_param("version");
             break;
         }
+        case MergeTreeData::MergingParams::Unique:
+            add_optional_param("version");
     }
 
     ASTs & engine_args = args.engine_args;
@@ -503,6 +507,18 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// sorting key.
         merging_param_key_arg = merging_params.version_column;
     }
+    else if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        /// If the last element is not index_granularity or replica_name (a literal), then this is the name of the version column.
+        if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
+        {
+            if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.version_column))
+                throw Exception(
+                    "Version column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                    ErrorCodes::BAD_ARGUMENTS);
+            --arg_cnt;
+        }
+    }
 
     String date_column_name;
 
@@ -513,6 +529,13 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         columns = getColumnsDescriptionFromZookeeper(zookeeper_path, args.getContext());
     else
         columns = args.columns;
+
+    if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        auto column = ColumnDescription{"_unique_key_id", std::make_shared<DataTypeUInt32>()};
+        column.default_desc = ColumnDefault{ColumnDefaultKind::Materialized, {}};
+        columns.add(column, {}, {}, false);
+    }
 
     metadata.setColumns(columns);
     metadata.setComment(args.comment);
@@ -563,6 +586,21 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             /// and set it's definition_ast to nullptr (so isPrimaryKeyDefined()
             /// will return false but hasPrimaryKey() will return true.
             metadata.primary_key.definition_ast = nullptr;
+        }
+
+        /// If unique key explicitly defined, than get it from AST
+        if (args.storage_def->unique_key)
+        {
+            metadata.unique_key = KeyDescription::getKeyFromAST(args.storage_def->unique_key->ptr(), metadata.columns, args.getContext());
+        }
+        else /// Otherwise we don't have explicit unique key and copy it from primary key
+        {
+            metadata.unique_key = KeyDescription::getKeyFromAST(
+                args.storage_def->primary_key ? args.storage_def->primary_key->ptr() : args.storage_def->order_by->ptr(),
+                metadata.columns,
+                args.getContext());
+            /// and set it's definition_ast to nullptr
+            metadata.unique_key.definition_ast = nullptr;
         }
 
         auto minmax_columns = metadata.getColumnsRequiredForPartitionKey();
@@ -647,6 +685,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// nullptr
         metadata.primary_key.definition_ast = nullptr;
 
+        metadata.unique_key = KeyDescription::getKeyFromAST(engine_args[arg_num], metadata.columns, args.getContext());
+        metadata.unique_key.definition_ast = nullptr;
+
         ++arg_num;
 
         auto minmax_columns = metadata.getColumnsRequiredForPartitionKey();
@@ -729,6 +770,7 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("SummingMergeTree", create, features);
     factory.registerStorage("GraphiteMergeTree", create, features);
     factory.registerStorage("VersionedCollapsingMergeTree", create, features);
+    factory.registerStorage("UniqueMergeTree", create, features);
 
     features.supports_replication = true;
     features.supports_deduplication = true;

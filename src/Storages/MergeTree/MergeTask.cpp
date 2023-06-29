@@ -901,6 +901,11 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
                 header, pipes.size(), sort_description, ctx->merging_params.sign_column,
                 merge_block_size, ctx->rows_sources_write_buf.get(), ctx->blocks_are_granules_size);
             break;
+
+        case MergeTreeData::MergingParams::Unique:
+            merged_transform = std::make_shared<MergingSortedTransform>(
+                header, pipes.size(), sort_description, merge_block_size, SortingQueueStrategy::Default, 0, ctx->rows_sources_write_buf.get(), true, ctx->blocks_are_granules_size);
+            break;
     }
 
     auto res_pipe = Pipe::unitePipes(std::move(pipes));

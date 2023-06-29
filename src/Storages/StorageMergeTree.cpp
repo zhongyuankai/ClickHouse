@@ -102,6 +102,7 @@ StorageMergeTree::StorageMergeTree(
     , reader(*this)
     , writer(*this)
     , merger_mutator(*this, getContext()->getMergeMutateExecutor()->getMaxTasksCount())
+    , data_unique(std::make_shared<MergeTreeDataUnique>(*this))
 {
     loadDataParts(has_force_restore_data_flag);
 

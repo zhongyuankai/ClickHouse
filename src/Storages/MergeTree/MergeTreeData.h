@@ -60,6 +60,9 @@ using BackupEntries = std::vector<std::pair<String, std::shared_ptr<const IBacku
 class MergeTreeTransaction;
 using MergeTreeTransactionPtr = std::shared_ptr<MergeTreeTransaction>;
 
+class MergeTreeDataUnique;
+using MergeTreeDataUniquePtr = std::shared_ptr<MergeTreeDataUnique>;
+
 /// Auxiliary struct holding information about the future merged or mutated part.
 struct EmergingPartInfo
 {
@@ -337,6 +340,7 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
+            Unique              = 8,
         };
 
         Mode mode;
@@ -535,6 +539,7 @@ public:
     /// Makes sense only for ordinary MergeTree engines because for them block numbering doesn't depend on partition.
     std::optional<Int64> getMinPartDataVersion() const;
 
+    virtual MergeTreeDataUniquePtr getMergeTreeDataUnique() { return nullptr; }
 
     /// Returns all detached parts
     DetachedPartsInfo getDetachedParts() const;
