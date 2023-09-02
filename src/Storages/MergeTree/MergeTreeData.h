@@ -539,7 +539,7 @@ public:
     /// Makes sense only for ordinary MergeTree engines because for them block numbering doesn't depend on partition.
     std::optional<Int64> getMinPartDataVersion() const;
 
-    virtual MergeTreeDataUniquePtr getMergeTreeDataUnique() { return nullptr; }
+    virtual MergeTreeDataUniquePtr getMergeTreeDataUnique() const { return nullptr; }
 
     /// Returns all detached parts
     DetachedPartsInfo getDetachedParts() const;

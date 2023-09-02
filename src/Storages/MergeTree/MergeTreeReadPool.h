@@ -120,6 +120,7 @@ private:
     {
         MergeTreeData::DataPartPtr data_part;
         size_t part_index_in_query;
+        PartBitmap::Ptr unique_bitmap;
     };
 
     std::vector<Part> parts_with_idx;

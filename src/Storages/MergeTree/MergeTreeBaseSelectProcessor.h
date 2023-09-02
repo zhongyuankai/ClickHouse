@@ -5,6 +5,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/RequestResponse.h>
+#include <Storages/MergeTree/MergeTreeDataUnique.h>
 
 #include <Processors/ISource.h>
 
@@ -101,6 +102,8 @@ protected:
          const MergeTreeReaderSettings & reader_settings,
          const std::vector<std::unique_ptr<IMergeTreeReader>> & pre_reader_for_step,
          const PrewhereExprStep & lightweight_delete_filter_step,
+         const PrewhereExprStep & unique_key_filter_step,
+         PartBitmap::Ptr unique_bitmap,
          const Names & non_const_virtual_column_names);
 
     /// Sets up data readers for each step of prewhere and where
@@ -118,6 +121,7 @@ protected:
 
     /// This step is added when the part has lightweight delete mask
     const PrewhereExprStep lightweight_delete_filter_step { nullptr, LightweightDeleteDescription::FILTER_COLUMN.name, true, true };
+    const PrewhereExprStep unique_key_filter_step { nullptr, UniqueKeyIdDescription::FILTER_COLUMN.name, true, true };
     PrewhereInfoPtr prewhere_info;
     std::unique_ptr<PrewhereExprInfo> prewhere_actions;
 

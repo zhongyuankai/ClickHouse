@@ -5,6 +5,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/MergeTree/MergeTreeDataUnique.h>
 
 #include <Common/Macros.h>
 #include <Common/OptimizedRegularExpression.h>
@@ -532,7 +533,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     if (merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
-        auto column = ColumnDescription{"_unique_key_id", std::make_shared<DataTypeUInt32>()};
+        auto column = ColumnDescription{UniqueKeyIdDescription::FILTER_COLUMN.name, UniqueKeyIdDescription::FILTER_COLUMN.type};
         column.default_desc = ColumnDefault{ColumnDefaultKind::Materialized, {}};
         columns.add(column, {}, {}, false);
     }

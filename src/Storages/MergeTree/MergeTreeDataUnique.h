@@ -12,46 +12,80 @@ namespace DB
 //class MergeTreeData;
 //using DataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
 
-
-
-class PartBitmap
+struct UniqueKeyIdDescription
 {
-public:
-    explicit PartBitmap(MergeTreeData::DataPartPtr data_part_, UInt32 seq_id_)
-        : data_part(data_part_)
-        , seq_id(seq_id_)
+    static const NameAndTypePair FILTER_COLUMN;
+};
+
+using RBitmap = RoaringBitmapWithSmallSet<UInt32, 255>;
+using RBitmapPtr = std::shared_ptr<RBitmap>;
+
+class PartBitmap : public COW<PartBitmap>
+{
+private:
+    friend class COW<PartBitmap>;
+
+    PartBitmap() = default;
+
+    explicit PartBitmap(MergeTreeData::DataPartPtr data_part_)
+        : PartBitmap(data_part_, 0)
     {}
+
+    explicit PartBitmap(MergeTreeData::DataPartPtr data_part_, UInt32 seq_id_)
+        : PartBitmap(data_part_, std::make_shared<RBitmap>(), seq_id_, seq_id_)
+    {}
+
+    explicit PartBitmap(MergeTreeData::DataPartPtr data_part_, RBitmapPtr bitmap_, UInt32 seq_id_, UInt32 update_seq_id_)
+        : data_part(data_part_)
+        , bitmap(bitmap_)
+        , seq_id(seq_id_)
+        , update_seq_id(update_seq_id_)
+    {}
+
+
+    virtual PartBitmap::MutablePtr clone() const
+    {
+        RBitmapPtr new_bitmap = std::make_shared<RBitmap>();
+        new_bitmap->rb_or(*bitmap);
+        return create(data_part, new_bitmap, seq_id, update_seq_id);
+    }
+
+public:
+    virtual ~PartBitmap() = default;
 
     void add(UInt32 unique_id)
     {
-        std::cout << "add " << std::endl;
-        if (!bitmap)
-        {
-            std::cout << "init " << std::endl;
-            bitmap = std::make_shared<RBitmap>();
-        }
-
-        std::cout << "end " << std::endl;
         bitmap->add(unique_id);
     }
 
     void write();
 
-private:
-    using RBitmap = RoaringBitmapWithSmallSet<UInt32, 255>;
-    using RBitmapPtr = std::shared_ptr<RBitmap>;
+    void read();
+
+    String toString() const
+    {
+        PaddedPODArray<UInt32> res_data;
+        bitmap->rb_to_array(res_data);
+        std::stringstream ss;
+        ss << "seq_id: " << seq_id << ", update_seq_id: " << update_seq_id;
+        ss << ", part_name: " << data_part->name << "[";
+        for (UInt32 v : res_data) ss << v << ", ";
+        ss.peek();
+        ss << "]";
+        return ss.str();
+    }
 
     MergeTreeData::DataPartPtr data_part;
 
+    RBitmapPtr bitmap;
     UInt32 seq_id;
     UInt32 update_seq_id;
-    RBitmapPtr bitmap;
 };
 
 
 
-using PartBitmapPtr = std::shared_ptr<PartBitmap>;
-using PartBitmaps = std::unordered_map<String, PartBitmapPtr>;
+using PartBitmaps = std::unordered_map<String, PartBitmap::Ptr>;
+using PartBitmapsVector = std::vector<PartBitmap::Ptr>;
 
 class MergeTreeUniquePartition
 {
@@ -62,6 +96,10 @@ public:
     {}
 
     void update(MergeTreeMutableDataPartPtr data_part, Block & block, const StorageMetadataPtr & metadata_snapshot);
+
+    PartBitmap::Ptr & getPartBitmap(MergeTreeData::DataPartPtr data_part);
+
+    void mergePartBitmaps(MergeTreeData::DataPartsVector & parts);
 
 private:
     using Slice = rocksdb::Slice;
@@ -82,6 +120,7 @@ private:
         return last_bitmap_seq_id++;
     }
 
+
     MergeTreeData & data;
     String partition_id;
 
@@ -91,7 +130,9 @@ private:
     UInt32 last_unique_seq_id = 1;
     UInt32 last_bitmap_seq_id = 1;
     /// part bitmap cache
-    PartBitmaps part_bitmaps;
+    PartBitmaps part_bitmaps_cache;
+    std::mutex part_bitmaps_mutex;
+
     std::mutex write_mutex;
 };
 
@@ -108,6 +149,14 @@ public:
     {}
 
     void update(MergeTreeMutableDataPartPtr data_part, Block & block, const StorageMetadataPtr & metadata_snapshot);
+
+    PartBitmap::Ptr getPartBitmap(MergeTreeData::DataPartPtr data_part);
+
+    MergeTreeUniquePartitionPtr getUniquePartition(MergeTreeData::DataPartPtr data_part);
+
+    void mergePartitionPartBitmaps(MergeTreeData::DataPartsVector & partition_parts,
+                                   MergeTreeData::DataPartsVector & select_parts,
+                                   PartBitmapsVector & bitmaps);
 
 private:
     MergeTreeData & data;

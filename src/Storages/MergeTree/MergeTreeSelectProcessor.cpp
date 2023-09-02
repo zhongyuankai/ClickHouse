@@ -23,6 +23,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     const MergeTreeReaderSettings & reader_settings_,
     const Names & virt_column_names_,
     size_t part_index_in_query_,
+    PartBitmap::Ptr unique_bitmap_,
     bool has_limit_below_one_block_,
     std::optional<ParallelReadingExtension> extension_)
     : MergeTreeBaseSelectProcessor{
@@ -32,6 +33,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
         reader_settings_, use_uncompressed_cache_, virt_column_names_, extension_},
     required_columns{std::move(required_columns_)},
     data_part{owned_data_part_},
+    unique_bitmap(unique_bitmap_),
     sample_block(storage_snapshot_->metadata->getSampleBlock()),
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),

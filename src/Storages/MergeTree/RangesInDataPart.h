@@ -2,6 +2,7 @@
 
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/MergeTreeDataUnique.h>
 
 
 namespace DB
@@ -13,6 +14,7 @@ struct RangesInDataPart
     MergeTreeData::DataPartPtr data_part;
     size_t part_index_in_query;
     MarkRanges ranges;
+    PartBitmap::Ptr unique_bitmap;
 
     RangesInDataPart() = default;
 

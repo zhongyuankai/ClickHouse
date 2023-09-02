@@ -31,6 +31,7 @@ public:
         const MergeTreeReaderSettings & reader_settings,
         const Names & virt_column_names = {},
         size_t part_index_in_query_ = 0,
+        PartBitmap::Ptr unique_bitmap_ = nullptr,
         bool has_limit_below_one_block_ = false,
         std::optional<ParallelReadingExtension> extension_ = {});
 
@@ -52,6 +53,9 @@ protected:
 
     /// Data part will not be removed if the pointer owns it
     MergeTreeData::DataPartPtr data_part;
+
+    /// Used only in unique merge tree
+    PartBitmap::Ptr unique_bitmap;
 
     /// Cache getSampleBlock call, which might be heavy.
     Block sample_block;

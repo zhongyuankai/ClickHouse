@@ -115,7 +115,7 @@ public:
 
     MergeTreeDeduplicationLog * getDeduplicationLog() { return deduplication_log.get(); }
 
-    MergeTreeDataUniquePtr getMergeTreeDataUnique() override { return data_unique; }
+    MergeTreeDataUniquePtr getMergeTreeDataUnique() const override { return data_unique; }
 
 private:
 

@@ -142,7 +142,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(size_t min_marks_to_read, size_t
         : std::make_unique<MergeTreeBlockSizePredictor>(*per_part.size_predictor); /// make a copy
 
     return std::make_unique<MergeTreeReadTask>(
-        part.data_part, ranges_to_get_from_part, part.part_index_in_query, ordered_names,
+        part.data_part, ranges_to_get_from_part, part.part_index_in_query, part.unique_bitmap, ordered_names,
         per_part.column_name_set, per_part.task_columns,
         prewhere_info && prewhere_info->remove_prewhere_column, std::move(curr_task_size_predictor));
 }
@@ -228,7 +228,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(const RangesInDataParts &
         per_part.column_name_set = {required_column_names.begin(), required_column_names.end()};
         per_part.task_columns = std::move(task_columns);
 
-        parts_with_idx.push_back({ part.data_part, part.part_index_in_query });
+        parts_with_idx.push_back({ part.data_part, part.part_index_in_query, part.unique_bitmap});
     }
 
     return per_part_sum_marks;

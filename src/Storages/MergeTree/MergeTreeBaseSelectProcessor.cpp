@@ -249,6 +249,13 @@ void MergeTreeBaseSelectProcessor::initializeMergeTreeReadersForPart(
 
     pre_reader_for_step.clear();
 
+    if (reader_settings.apply_unique_key)
+    {
+        pre_reader_for_step.push_back(data_part->getReader({UniqueKeyIdDescription::FILTER_COLUMN}, metadata_snapshot, mark_ranges,
+                                                           owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
+                                                           value_size_map, profile_callback));
+    }
+
     /// Add lightweight delete filtering step
     if (reader_settings.apply_deleted_mask && data_part->hasLightweightDelete())
     {
@@ -273,7 +280,7 @@ void MergeTreeBaseSelectProcessor::initializeRangeReaders(MergeTreeReadTask & cu
     return initializeRangeReadersImpl(
         current_task.range_reader, current_task.pre_range_readers, prewhere_info, prewhere_actions.get(),
         reader.get(), current_task.data_part->hasLightweightDelete(), reader_settings,
-        pre_reader_for_step, lightweight_delete_filter_step, non_const_virtual_column_names);
+        pre_reader_for_step, lightweight_delete_filter_step, unique_key_filter_step, current_task.unique_bitmap, non_const_virtual_column_names);
 }
 
 void MergeTreeBaseSelectProcessor::initializeRangeReadersImpl(
@@ -281,16 +288,25 @@ void MergeTreeBaseSelectProcessor::initializeRangeReadersImpl(
     PrewhereInfoPtr prewhere_info, const PrewhereExprInfo * prewhere_actions,
     IMergeTreeReader * reader, bool has_lightweight_delete, const MergeTreeReaderSettings & reader_settings,
     const std::vector<std::unique_ptr<IMergeTreeReader>> & pre_reader_for_step,
-    const PrewhereExprStep & lightweight_delete_filter_step, const Names & non_const_virtual_column_names)
+    const PrewhereExprStep & lightweight_delete_filter_step, const PrewhereExprStep & unique_key_filter_step, PartBitmap::Ptr unique_bitmap,
+    const Names & non_const_virtual_column_names)
 {
     MergeTreeRangeReader * prev_reader = nullptr;
     bool last_reader = false;
     size_t pre_readers_shift = 0;
 
+    if (reader_settings.apply_unique_key)
+    {
+        MergeTreeRangeReader pre_range_reader(pre_reader_for_step[pre_readers_shift].get(), prev_reader, &unique_key_filter_step, last_reader, non_const_virtual_column_names, unique_bitmap);
+        pre_range_readers.push_back(std::move(pre_range_reader));
+        prev_reader = &pre_range_readers.back();
+        pre_readers_shift++;
+    }
+
     /// Add filtering step with lightweight delete mask
     if (reader_settings.apply_deleted_mask && has_lightweight_delete)
     {
-        MergeTreeRangeReader pre_range_reader(pre_reader_for_step[0].get(), prev_reader, &lightweight_delete_filter_step, last_reader, non_const_virtual_column_names);
+        MergeTreeRangeReader pre_range_reader(pre_reader_for_step[pre_readers_shift].get(), prev_reader, &lightweight_delete_filter_step, last_reader, non_const_virtual_column_names);
         pre_range_readers.push_back(std::move(pre_range_reader));
         prev_reader = &pre_range_readers.back();
         pre_readers_shift++;

@@ -27,6 +27,8 @@ struct MergeTreeReaderSettings
     bool read_in_order = false;
     /// Deleted mask is applied to all reads except internal select from mutate some part columns.
     bool apply_deleted_mask = true;
+    /// Only for unique merge tree, the unique key id should be used to deduplicate
+    bool apply_unique_key = false;
 };
 
 struct MergeTreeWriterSettings

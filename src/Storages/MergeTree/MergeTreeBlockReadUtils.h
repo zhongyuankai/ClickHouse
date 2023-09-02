@@ -49,6 +49,8 @@ struct MergeTreeReadTask
     MarkRanges mark_ranges;
     /// for virtual `part_index` virtual column
     size_t part_index_in_query;
+    /// Used only in unique merge tree
+    PartBitmap::Ptr unique_bitmap;
     /// ordered list of column names used in this query, allows returning blocks with consistent ordering
     const Names & ordered_names;
     /// used to determine whether column should be filtered during PREWHERE or WHERE
@@ -71,6 +73,7 @@ struct MergeTreeReadTask
         const MergeTreeData::DataPartPtr & data_part_,
         const MarkRanges & mark_ranges_,
         size_t part_index_in_query_,
+        PartBitmap::Ptr unique_bitmap_,
         const Names & ordered_names_,
         const NameSet & column_name_set_,
         const MergeTreeReadTaskColumns & task_columns_,

@@ -8,6 +8,8 @@ namespace ErrorCodes
     extern const int ROCKSDB_ERROR;
 }
 
+const NameAndTypePair UniqueKeyIdDescription::FILTER_COLUMN {"_unique_key_id", std::make_shared<DataTypeUInt32>()};
+
 void PartBitmap::write()
 {
     String path = data_part->getDataPartStoragePtr()->getFullPath();
@@ -19,6 +21,15 @@ void PartBitmap::write()
         writeVarUInt(update_seq_id, out);
     }
     fs::rename(tmp_path, path + "bitmap.bin");
+}
+
+void PartBitmap::read()
+{
+    String path = fs::path(data_part->getDataPartStoragePtr()->getFullPath()) / "bitmap.bin";
+    ReadBufferFromFile in(path);
+    bitmap->read(in);
+    readVarUInt(seq_id, in);
+    readVarUInt(update_seq_id, in);
 }
 
 void MergeTreeUniquePartition::initRocksDB()
@@ -176,7 +187,7 @@ void MergeTreeUniquePartition::writeUniqueColumn(MergeTreeMutableDataPartPtr dat
         }
     }
 
-    PartBitmap bitmap {data_part, getAndAddBitmapId()};
+    PartBitmap::MutablePtr part_bitmap = PartBitmap::create(data_part, getAndAddBitmapId());
     Batch batch;
     batch.Put("_last_unique_seq_id",
               {reinterpret_cast<char *>(&last_unique_seq_id), sizeof(last_unique_seq_id)});
@@ -191,7 +202,7 @@ void MergeTreeUniquePartition::writeUniqueColumn(MergeTreeMutableDataPartPtr dat
         auto & v = it.second;
         batch.Put(it.first,
                   {reinterpret_cast<char *>(&(v.unique_id)), sizeof(v.unique_id) + sizeof(v.version)});
-        bitmap.add(v.unique_id);
+        part_bitmap->add(v.unique_id);
 
         /// write key
         writeString(it.first, *out);
@@ -202,7 +213,7 @@ void MergeTreeUniquePartition::writeUniqueColumn(MergeTreeMutableDataPartPtr dat
     }
 
     rocksdb->Write(rocksdb::WriteOptions(), &batch);
-    bitmap.write();
+    part_bitmap->write();
 }
 
 
@@ -231,11 +242,76 @@ void MergeTreeUniquePartition::update(MergeTreeMutableDataPartPtr data_part, Blo
     }
 
     /// add unique_key_id
-    ColumnWithTypeAndName & unique_id_column = block.getByName("_unique_key_id");
+    ColumnWithTypeAndName & unique_id_column = block.getByName(UniqueKeyIdDescription::FILTER_COLUMN.name);
     auto column = unique_id_column.type->createColumn();
     writeUniqueColumn(data_part, unique_columns, version_column, column);
     unique_id_column.column = std::move(column);
     block.insert(unique_id_column);
+}
+
+PartBitmap::Ptr & MergeTreeUniquePartition::getPartBitmap(MergeTreeData::DataPartPtr data_part)
+{
+    auto iter = part_bitmaps_cache.find(data_part->name);
+    if (iter == part_bitmaps_cache.end())
+    {
+        PartBitmap::MutablePtr part_bitmap = PartBitmap::create(data_part);
+        part_bitmap->read();
+        return part_bitmaps_cache.insert(std::make_pair(data_part->name, std::move(part_bitmap))).first->second;
+    }
+
+    return iter->second;
+}
+
+void MergeTreeUniquePartition::mergePartBitmaps(MergeTreeData::DataPartsVector & parts)
+{
+    if (parts.empty())
+        return;
+
+    size_t base_update_seq_id  = getPartBitmap(parts[0])->update_seq_id;
+    bool merged = true;
+    for (const auto & part : parts)
+    {
+        if (base_update_seq_id != getPartBitmap(part)->update_seq_id)
+        {
+            merged = false;
+            break;
+        }
+    }
+
+    if (merged)
+        return;
+
+    std::sort(parts.begin(), parts.end(), [this](MergeTreeData::DataPartPtr & l_part, MergeTreeData::DataPartPtr r_part)
+              { return getPartBitmap(l_part)->seq_id < getPartBitmap(r_part)->seq_id; });
+
+    RBitmapPtr merged_bitmap = std::make_shared<RBitmap>();
+    bool update_all = false;
+    for (size_t i = parts.size() - 1; i != 0; --i)
+    {
+        PartBitmap::Ptr current_part_bitmap = getPartBitmap(parts[i]);
+        PartBitmap::Ptr & next_part_bitmap = getPartBitmap(parts[i - 1]);
+        merged_bitmap->rb_or(*current_part_bitmap->bitmap);
+
+        if (update_all || current_part_bitmap->update_seq_id > next_part_bitmap->update_seq_id)
+        {
+            LOG_DEBUG(&Poco::Logger::root(), "update delayed part bitmap part: {} seq: {} update_seq: {}, new_part :{} seq: {}, update_seq: {}",
+                      next_part_bitmap->data_part->name, next_part_bitmap->seq_id,
+                      next_part_bitmap->update_seq_id, next_part_bitmap->data_part->name, current_part_bitmap->seq_id,
+                      current_part_bitmap->update_seq_id);
+
+            PartBitmap::MutablePtr new_part_bitmap = PartBitmap::mutate(std::move(next_part_bitmap));
+            new_part_bitmap->bitmap->rb_andnot(*merged_bitmap);
+            new_part_bitmap->update_seq_id = current_part_bitmap->update_seq_id;
+            new_part_bitmap->write();
+            next_part_bitmap = std::move(new_part_bitmap);
+            update_all = true;
+        }
+        else {
+            LOG_DEBUG(&Poco::Logger::root(), "updated part bitmap part: {} seq: {} update_seq: {}",
+                      current_part_bitmap->data_part->name, current_part_bitmap->seq_id, current_part_bitmap->update_seq_id);
+        }
+    }
+
 }
 
 void MergeTreeDataUnique::update(MergeTreeMutableDataPartPtr data_part, Block & block, const StorageMetadataPtr & metadata_snapshot)
@@ -243,11 +319,24 @@ void MergeTreeDataUnique::update(MergeTreeMutableDataPartPtr data_part, Block & 
     if (block.rows() == 0)
         return;
 
+    auto unique_partition = getUniquePartition(data_part);
+
+    unique_partition->update(data_part, block, metadata_snapshot);
+}
+
+PartBitmap::Ptr MergeTreeDataUnique::getPartBitmap(MergeTreeData::DataPartPtr data_part)
+{
+    auto unique_partition = getUniquePartition(data_part);
+    return unique_partition->getPartBitmap(data_part);
+}
+
+MergeTreeUniquePartitionPtr MergeTreeDataUnique::getUniquePartition(MergeTreeData::DataPartPtr data_part)
+{
     MergeTreeUniquePartitionPtr unique_partition;
     {
         std::lock_guard lock(write_mutex);
 
-        String partition_id = data_part->partition.getID(metadata_snapshot->getPartitionKey().sample_block);
+        String partition_id = data_part->partition.getID(data);
         auto it = unique_partitions.find(partition_id);
         if (it == unique_partitions.end())
             unique_partition
@@ -255,9 +344,21 @@ void MergeTreeDataUnique::update(MergeTreeMutableDataPartPtr data_part, Block & 
         else
             unique_partition = it->second;
     }
-
-    unique_partition->update(data_part, block, metadata_snapshot);
+    return unique_partition;
 }
 
+void MergeTreeDataUnique::mergePartitionPartBitmaps(MergeTreeData::DataPartsVector & partition_parts,
+                                                    MergeTreeData::DataPartsVector & select_parts,
+                                                    PartBitmapsVector & bitmaps)
+{
+    if (partition_parts.empty() || select_parts.empty())
+        return;
+
+    auto unique_partition = getUniquePartition(partition_parts[0]);
+    unique_partition->mergePartBitmaps(partition_parts);
+
+    for (const auto & part : select_parts)
+        bitmaps.emplace_back(unique_partition->getPartBitmap(part));
+}
 
 }

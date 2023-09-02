@@ -2,6 +2,7 @@
 #include <Core/Block.h>
 #include <Common/logger_useful.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/MergeTreeDataUnique.h>
 
 namespace DB
 {
@@ -45,7 +46,8 @@ public:
         MergeTreeRangeReader * prev_reader_,
         const PrewhereExprStep * prewhere_info_,
         bool last_reader_in_chain_,
-        const Names & non_const_virtual_column_names);
+        const Names & non_const_virtual_column_names,
+        PartBitmap::Ptr unique_bitmap_ = nullptr);
 
     MergeTreeRangeReader() = default;
 
@@ -258,6 +260,7 @@ private:
     const MergeTreeIndexGranularity * index_granularity = nullptr;
     MergeTreeRangeReader * prev_reader = nullptr; /// If not nullptr, read from prev_reader firstly.
     const PrewhereExprStep * prewhere_info;
+    PartBitmap::Ptr unique_bitmap;
 
     Stream stream;
 
