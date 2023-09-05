@@ -35,6 +35,10 @@ private:
         : PartBitmap(data_part_, std::make_shared<RBitmap>(), seq_id_, seq_id_)
     {}
 
+    explicit PartBitmap(MergeTreeData::DataPartPtr data_part_, UInt32 seq_id_, UInt32 update_seq_id_)
+        : PartBitmap(data_part_, std::make_shared<RBitmap>(), seq_id_, update_seq_id_)
+    {}
+
     explicit PartBitmap(MergeTreeData::DataPartPtr data_part_, RBitmapPtr bitmap_, UInt32 seq_id_, UInt32 update_seq_id_)
         : data_part(data_part_)
         , bitmap(bitmap_)

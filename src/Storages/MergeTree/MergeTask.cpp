@@ -380,6 +380,15 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::executeImpl()
     {
         global_ctx->rows_written += block.rows();
 
+        if (global_ctx->new_unique_bitmap)
+        {
+            auto unique_key_column = block.getByName(UniqueKeyIdDescription::FILTER_COLUMN.name);
+            auto & unique_id_data = typeid_cast<const ColumnUInt32 &>(*unique_key_column.column).getData();
+            auto & unique_bitmap = global_ctx->new_unique_bitmap;
+            for (size_t idx = 0; idx < block.rows(); ++idx)
+                unique_bitmap->add(unique_id_data[idx]);
+        }
+
         const_cast<MergedBlockOutputStream &>(*global_ctx->to).write(block);
 
         UInt64 result_rows = 0;
@@ -412,6 +421,9 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::executeImpl()
 
     if (ctx->need_remove_expired_values && global_ctx->ttl_merges_blocker->isCancelled())
         throw Exception("Cancelled merging parts with expired TTL", ErrorCodes::ABORTED);
+
+    if (global_ctx->new_unique_bitmap)
+        global_ctx->new_unique_bitmap->write();
 
     const auto data_settings = global_ctx->data->getSettings();
     const size_t sum_compressed_bytes_upper_bound = global_ctx->merge_list_element_ptr->total_size_bytes_compressed;
@@ -466,9 +478,30 @@ void MergeTask::VerticalMergeStage::prepareVerticalMergeForOneColumn() const
 
     global_ctx->column_progress = std::make_unique<MergeStageProgress>(ctx->progress_before, ctx->column_sizes->columnWeight(column_name));
 
+    PartBitmapsVector unique_bitmaps;
+    if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique)
+    {
+        auto partition_parts = global_ctx->data->getVisibleDataPartsVectorInPartition(
+            global_ctx->context,
+            global_ctx->future_part->parts.front()->info.partition_id);
+        MergeTreeDataUniquePtr data_unique = global_ctx->data->getMergeTreeDataUnique();
+        unique_bitmaps.reserve(global_ctx->future_part->parts.size());
+        data_unique->mergePartitionPartBitmaps(partition_parts, global_ctx->future_part->parts, unique_bitmaps);
+    }
+
+    UInt32 max_seq_id = 0;
+    UInt32 max_update_seq_id = 0;
     Pipes pipes;
     for (size_t part_num = 0; part_num < global_ctx->future_part->parts.size(); ++part_num)
     {
+        PartBitmap::Ptr unique_bitmap = nullptr;
+        if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique)
+        {
+            unique_bitmap = unique_bitmaps[part_num];
+            max_seq_id = std::max(unique_bitmap->seq_id, max_seq_id);
+            max_update_seq_id = std::max(unique_bitmap->update_seq_id, max_update_seq_id);
+        }
+
         Pipe pipe = createMergeTreeSequentialSource(
             *global_ctx->data,
             global_ctx->storage_snapshot,
@@ -477,10 +510,14 @@ void MergeTask::VerticalMergeStage::prepareVerticalMergeForOneColumn() const
             ctx->read_with_direct_io,
             true,
             false,
-            global_ctx->input_rows_filtered);
+            global_ctx->input_rows_filtered,
+            unique_bitmap);
 
         pipes.emplace_back(std::move(pipe));
     }
+
+    if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique)
+        global_ctx->new_unique_bitmap = PartBitmap::create(global_ctx->new_data_part, max_seq_id, max_update_seq_id);
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
 
@@ -813,18 +850,39 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
     global_ctx->horizontal_stage_progress = std::make_unique<MergeStageProgress>(
         ctx->column_sizes ? ctx->column_sizes->keyColumnsWeight() : 1.0);
 
-
-    for (const auto & part : global_ctx->future_part->parts)
+    PartBitmapsVector unique_bitmaps;
+    if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique)
     {
+        auto partition_parts = global_ctx->data->getVisibleDataPartsVectorInPartition(
+            global_ctx->context,
+            global_ctx->future_part->parts.front()->info.partition_id);
+        MergeTreeDataUniquePtr data_unique = global_ctx->data->getMergeTreeDataUnique();
+        unique_bitmaps.reserve(global_ctx->future_part->parts.size());
+        data_unique->mergePartitionPartBitmaps(partition_parts, global_ctx->future_part->parts, unique_bitmaps);
+    }
+
+    UInt32 max_seq_id = 0;
+    UInt32 max_update_seq_id = 0;
+    for (size_t part_num = 0; part_num < global_ctx->future_part->parts.size(); ++part_num)
+    {
+        PartBitmap::Ptr unique_bitmap = nullptr;
+        if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique)
+        {
+            unique_bitmap = unique_bitmaps[part_num];
+            max_seq_id = std::max(unique_bitmap->seq_id, max_seq_id);
+            max_update_seq_id = std::max(unique_bitmap->update_seq_id, max_update_seq_id);
+        }
+
         Pipe pipe = createMergeTreeSequentialSource(
             *global_ctx->data,
             global_ctx->storage_snapshot,
-            part,
+            global_ctx->future_part->parts[part_num],
             global_ctx->merging_column_names,
             ctx->read_with_direct_io,
             true,
             false,
-            global_ctx->input_rows_filtered);
+            global_ctx->input_rows_filtered,
+            unique_bitmap);
 
         if (global_ctx->metadata_snapshot->hasSortingKey())
         {
@@ -837,6 +895,8 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
         pipes.emplace_back(std::move(pipe));
     }
 
+    if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique)
+        global_ctx->new_unique_bitmap = PartBitmap::create(global_ctx->new_data_part, max_seq_id, max_update_seq_id);
 
     Names sort_columns = global_ctx->metadata_snapshot->getSortingKeyColumns();
     SortDescription sort_description;
