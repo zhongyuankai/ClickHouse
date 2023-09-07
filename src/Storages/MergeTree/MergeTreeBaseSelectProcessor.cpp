@@ -241,7 +241,8 @@ void MergeTreeBaseSelectProcessor::initializeMergeTreeReadersForPart(
     MergeTreeData::DataPartPtr & data_part,
     const MergeTreeReadTaskColumns & task_columns, const StorageMetadataPtr & metadata_snapshot,
     const MarkRanges & mark_ranges, const IMergeTreeReader::ValueSizeMap & value_size_map,
-    const ReadBufferFromFileBase::ProfileCallback & profile_callback)
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+    PartBitmap::Ptr unique_bitmap)
 {
     reader = data_part->getReader(task_columns.columns, metadata_snapshot, mark_ranges,
         owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
@@ -249,7 +250,7 @@ void MergeTreeBaseSelectProcessor::initializeMergeTreeReadersForPart(
 
     pre_reader_for_step.clear();
 
-    if (reader_settings.apply_unique_key)
+    if (reader_settings.apply_unique_key && unique_bitmap)
     {
         pre_reader_for_step.push_back(data_part->getReader({UniqueKeyIdDescription::FILTER_COLUMN}, metadata_snapshot, mark_ranges,
                                                            owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
@@ -295,7 +296,7 @@ void MergeTreeBaseSelectProcessor::initializeRangeReadersImpl(
     bool last_reader = false;
     size_t pre_readers_shift = 0;
 
-    if (reader_settings.apply_unique_key)
+    if (reader_settings.apply_unique_key && unique_bitmap)
     {
         MergeTreeRangeReader pre_range_reader(pre_reader_for_step[pre_readers_shift].get(), prev_reader, &unique_key_filter_step, last_reader, non_const_virtual_column_names, unique_bitmap);
         pre_range_readers.push_back(std::move(pre_range_reader));

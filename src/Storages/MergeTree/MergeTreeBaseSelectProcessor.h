@@ -111,7 +111,8 @@ protected:
         MergeTreeData::DataPartPtr & data_part,
         const MergeTreeReadTaskColumns & task_columns, const StorageMetadataPtr & metadata_snapshot,
         const MarkRanges & mark_ranges, const IMergeTreeReader::ValueSizeMap & value_size_map,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback);
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+        PartBitmap::Ptr unique_bitmap);
 
     /// Sets up range readers corresponding to data readers
     void initializeRangeReaders(MergeTreeReadTask & task);

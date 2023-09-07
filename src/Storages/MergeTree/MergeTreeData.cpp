@@ -708,8 +708,8 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
         throw Exception("Sign column for MergeTree cannot be specified in modes except Collapsing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
-        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing.",
+    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing && mode != MergingParams::Unique)
+        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing or Unique.",
                         ErrorCodes::LOGICAL_ERROR);
 
     if (!columns_to_sum.empty() && mode != MergingParams::Summing)

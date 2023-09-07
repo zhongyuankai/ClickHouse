@@ -122,7 +122,7 @@ void MergeTreeThreadSelectProcessor::finalizeNewTask()
     if (init_new_readers)
     {
         initializeMergeTreeReadersForPart(task->data_part, task->task_columns, metadata_snapshot,
-            task->mark_ranges, value_size_map, profile_callback);
+            task->mark_ranges, value_size_map, profile_callback, task->unique_bitmap);
     }
 
     last_readed_part_name = part_name;
