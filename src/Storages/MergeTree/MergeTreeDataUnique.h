@@ -9,9 +9,6 @@
 namespace DB
 {
 
-//class MergeTreeData;
-//using DataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
-
 struct UniqueKeyIdDescription
 {
     static const NameAndTypePair FILTER_COLUMN;
@@ -35,7 +32,9 @@ private:
         : PartBitmap(data_part_, std::make_shared<RBitmap>(), seq_id_, seq_id_)
     {}
 
-    explicit PartBitmap(MergeTreeData::DataPartPtr data_part_, UInt32 seq_id_, UInt32 update_seq_id_)
+    explicit PartBitmap(MergeTreeData::DataPartPtr data_part_,
+                        UInt32 seq_id_,
+                        UInt32 update_seq_id_)
         : PartBitmap(data_part_, std::make_shared<RBitmap>(), seq_id_, update_seq_id_)
     {}
 
@@ -99,7 +98,9 @@ public:
         , partition_id(partition_id_)
     {}
 
-    void update(MergeTreeMutableDataPartPtr data_part, Block & block, const StorageMetadataPtr & metadata_snapshot);
+    void update(MergeTreeMutableDataPartPtr data_part,
+                Block & block,
+                const StorageMetadataPtr & metadata_snapshot);
 
     PartBitmap::Ptr & getPartBitmap(MergeTreeData::DataPartPtr data_part);
 
@@ -111,17 +112,21 @@ private:
     using Status = rocksdb::Status;
 
     void initRocksDB();
+    void recoverRocksDB();
 
-    void writeUniqueColumn(MergeTreeMutableDataPartPtr data_part, ColumnRawPtrs unique_columns, ColumnPtr version_column, MutableColumnPtr & unique_id_column);
+    void writeUniqueColumn(MergeTreeMutableDataPartPtr data_part,
+                           ColumnRawPtrs unique_columns,
+                           ColumnPtr version_column,
+                           MutableColumnPtr & unique_id_column);
 
     UInt32 getAndAddUniqueId()
     {
-        return last_unique_seq_id++;
+        return ++last_unique_seq_id;
     }
 
     UInt32 getAndAddBitmapId()
     {
-        return last_bitmap_seq_id++;
+        return ++last_bitmap_seq_id;
     }
 
 
@@ -131,8 +136,8 @@ private:
     DiskPtr rocksdb_disk;
     std::unique_ptr<rocksdb::DB> rocksdb;
 
-    UInt32 last_unique_seq_id = 1;
-    UInt32 last_bitmap_seq_id = 1;
+    UInt32 last_unique_seq_id = 0;
+    UInt32 last_bitmap_seq_id = 0;
     /// part bitmap cache
     PartBitmaps part_bitmaps_cache;
     std::mutex part_bitmaps_mutex;
@@ -152,7 +157,9 @@ public:
         , log(&Poco::Logger::get(data.getLogName() + " (Unique)"))
     {}
 
-    void update(MergeTreeMutableDataPartPtr data_part, Block & block, const StorageMetadataPtr & metadata_snapshot);
+    void update(MergeTreeMutableDataPartPtr data_part,
+                Block & block,
+                const StorageMetadataPtr & metadata_snapshot);
 
     PartBitmap::Ptr getPartBitmap(MergeTreeData::DataPartPtr data_part);
 
