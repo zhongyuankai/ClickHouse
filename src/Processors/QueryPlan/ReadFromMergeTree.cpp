@@ -577,7 +577,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
             }
 
             ranges_to_get_from_part = split_ranges(ranges_to_get_from_part, input_order_info->direction);
-            new_parts.emplace_back(part.data_part, part.part_index_in_query, std::move(ranges_to_get_from_part));
+            new_parts.emplace_back(part.data_part, part.part_index_in_query, std::move(ranges_to_get_from_part), part.unique_bitmap);
         }
 
         auto read_type = input_order_info->direction == 1

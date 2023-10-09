@@ -19,8 +19,8 @@ struct RangesInDataPart
     RangesInDataPart() = default;
 
     RangesInDataPart(const MergeTreeData::DataPartPtr & data_part_, const size_t part_index_in_query_,
-                     const MarkRanges & ranges_ = MarkRanges{})
-        : data_part{data_part_}, part_index_in_query{part_index_in_query_}, ranges{ranges_}
+                     const MarkRanges & ranges_ = MarkRanges{}, PartBitmap::Ptr unique_bitmap_ = nullptr)
+        : data_part{data_part_}, part_index_in_query{part_index_in_query_}, ranges{ranges_}, unique_bitmap(unique_bitmap_)
     {
     }
 
