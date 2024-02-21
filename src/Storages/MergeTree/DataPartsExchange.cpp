@@ -317,8 +317,20 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
     }
 
     writeBinary(replicated_description.files.size(), out);
-    for (const auto & [file_name, desc] : replicated_description.files)
+    for (auto & [file_name, desc] : replicated_description.files)
     {
+#if USE_ROCKSDB
+        PartBitmapGuard::Lock lock;
+        /// When merging bitmaps, the bitmap.bin file will be updated and locked to prevent it from being changed during the sending process.
+        if (file_name == IMergeTreeDataPart::BITMAP_BIN_FILE_NAME)
+        {
+            auto uniquer = data.getMergeTreeDataUniquer();
+            lock = uniquer->lockPartBitmap(part);
+            /// Re-obtain the size of bitmap.bin.
+            desc.file_size = desc.file_size_getter();
+        }
+#endif
+
         writeStringBinary(file_name, out);
         writeBinary(desc.file_size, out);
 
@@ -845,7 +857,10 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
         if (file_name != "checksums.txt" &&
             file_name != "columns.txt" &&
             file_name != IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME &&
-            file_name != IMergeTreeDataPart::METADATA_VERSION_FILE_NAME)
+            file_name != IMergeTreeDataPart::METADATA_VERSION_FILE_NAME &&
+            file_name != IMergeTreeDataPart::BITMAP_BIN_FILE_NAME &&
+            file_name != IMergeTreeDataPart::KEY_ID_LOG_BIN_FILE_NAME &&
+            file_name != IMergeTreeDataPart::KEY_ID_LOG_COMPRESS_BIN_FILE_NAME)
             checksums.addFile(file_name, file_size, expected_hash);
     }
 

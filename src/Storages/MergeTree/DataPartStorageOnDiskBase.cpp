@@ -278,6 +278,10 @@ DataPartStorageOnDiskBase::getReplicatedFilesDescription(const NameSet & file_na
         {
             return disk->readFile(path, ReadSettings{}.adjustBufferSize(file_size), file_size, file_size);
         };
+        file_desc.file_size_getter = [disk, path]
+        {
+            return disk->getFileSize(path);
+        };
     }
 
     return description;
@@ -320,6 +324,10 @@ DataPartStorageOnDiskBase::getReplicatedFilesDescriptionForRemoteDisk(const Name
         file_desc.input_buffer_getter = [metadata_str]
         {
             return std::make_unique<ReadBufferFromString>(metadata_str);
+        };
+        file_desc.file_size_getter = [metadata_str]
+        {
+            return metadata_str.size();
         };
     }
 
@@ -742,6 +750,9 @@ void DataPartStorageOnDiskBase::clearDirectory(
         request.emplace_back(fs::path(dir) / "delete-on-destroy.txt", true);
         request.emplace_back(fs::path(dir) / "txn_version.txt", true);
         request.emplace_back(fs::path(dir) / "metadata_version.txt", true);
+        request.emplace_back(fs::path(dir) / IMergeTreeDataPart::BITMAP_BIN_FILE_NAME, true);
+        request.emplace_back(fs::path(dir) / IMergeTreeDataPart::KEY_ID_LOG_BIN_FILE_NAME, true);
+        request.emplace_back(fs::path(dir) / IMergeTreeDataPart::KEY_ID_LOG_COMPRESS_BIN_FILE_NAME, true);
 
         disk->removeSharedFiles(request, !can_remove_shared_data, names_not_to_remove);
         disk->removeDirectory(dir);

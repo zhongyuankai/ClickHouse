@@ -26,11 +26,16 @@ class WriteBuffer;
 
 struct TableStatus
 {
-    bool is_replicated = false;
+    /// 0 bit is_replicated
+    /// 1 bit is_leader
+    /// 2-7 bit reserved
+    uint8_t replica_status = 0;
     UInt32 absolute_delay = 0;
-
     void write(WriteBuffer & out) const;
     void read(ReadBuffer & in);
+
+    bool isReplicated() const { return replica_status > 0; }
+    bool isLeader() const { return replica_status == 0b00000011; }
 };
 
 struct TablesStatusRequest

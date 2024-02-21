@@ -26,6 +26,7 @@
 #include <Storages/MergeTree/ReplicatedMergeTreeRestartingThread.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeTableMetadata.h>
 #include <Storages/MergeTree/ReplicatedTableStatus.h>
+#include <Storages/MergeTree/LeaderElection.h>
 #include <Storages/RenamingRestrictions.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Cluster.h>
@@ -151,6 +152,9 @@ public:
     bool supportsParallelInsert() const override { return true; }
     bool supportsReplication() const override { return true; }
     bool supportsDeduplication() const override { return true; }
+
+    bool isOnlyWriteLeaderReplica() override { return merging_params.mode == MergingParams::Unique; }
+    bool isLeader() const { return is_leader; }
 
     void read(
         QueryPlan & query_plan,
@@ -443,6 +447,7 @@ private:
       * It can be false only when old ClickHouse versions are working on the same cluster, because now we allow multiple leaders.
       */
     std::atomic<bool> is_leader {false};
+    zkutil::LeaderElectionPtr leader_election = nullptr;
 
     InterserverIOEndpointPtr data_parts_exchange_endpoint;
 

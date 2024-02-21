@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/IExecutableTask.h>
 #include <Storages/MergeTree/MergeProgress.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeDataUniquer.h>
 #include <Storages/MergeTree/IMergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/FutureMergedMutatedPart.h>
@@ -166,6 +167,14 @@ private:
 
         MergeTreeData::MutableDataPartPtr new_data_part{nullptr};
 
+        PartBitmap::MutablePtr new_part_bitmap{nullptr};
+        PartBitmaps part_bitmaps{};
+
+        /// Write unique key log file, compatible with older versions.
+        std::unique_ptr<WriteBufferFromFileBase> unique_buffer;
+        std::unique_ptr<CompressedWriteBuffer> unique_compressed_buffer;
+        UInt32 max_unique_id = 0;
+
         /// If lightweight delete mask is present then some input rows are filtered out right after reading.
         std::shared_ptr<std::atomic<size_t>> input_rows_filtered{std::make_shared<std::atomic<size_t>>(0)};
         size_t rows_written{0};
@@ -230,6 +239,8 @@ private:
 
         bool prepare();
         bool executeImpl();
+
+        void writeUniqueKeyLog(Block & block);
 
         using ExecuteAndFinalizeHorizontalPartSubtasks = std::array<std::function<bool()>, 2>;
 

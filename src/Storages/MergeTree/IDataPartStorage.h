@@ -195,10 +195,12 @@ public:
     struct ReplicatedFilesDescription
     {
         using InputBufferGetter = std::function<std::unique_ptr<ReadBuffer>()>;
+        using FileSizeGetter = std::function<size_t()>;
 
         struct ReplicatedFileDescription
         {
             InputBufferGetter input_buffer_getter;
+            FileSizeGetter file_size_getter;
             size_t file_size;
         };
 

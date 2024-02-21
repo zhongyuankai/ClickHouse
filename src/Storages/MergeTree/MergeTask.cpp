@@ -75,6 +75,14 @@ static void extractMergingAndGatheringColumns(
     if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
         key_columns.emplace(merging_params.sign_column);
 
+    /// Force unique column and version column for Unique mode.
+    if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        key_columns.insert(merging_params.unique_columns.begin(), merging_params.unique_columns.end());
+        key_columns.emplace(merging_params.version_column);
+        key_columns.emplace(UniqueKeyIdDescription::FILTER_COLUMN.name);
+    }
+
     /// Force to merge at least one column in case of empty key
     if (key_columns.empty())
         key_columns.emplace(storage_columns.front().name);
@@ -191,6 +199,33 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
 
     global_ctx->all_column_names = global_ctx->metadata_snapshot->getColumns().getNamesOfPhysical();
     global_ctx->storage_columns = global_ctx->metadata_snapshot->getColumns().getAllPhysical();
+
+#if USE_ROCKSDB
+    if (ctx->merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        global_ctx->all_column_names.emplace_back(UniqueKeyIdDescription::FILTER_COLUMN.name);
+        global_ctx->storage_columns.emplace_back(UniqueKeyIdDescription::FILTER_COLUMN);
+
+        /// Merge bitmap
+        MergeTreeDataUniquerPtr uniquer = global_ctx->data->getMergeTreeDataUniquer();
+        global_ctx->part_bitmaps =
+            uniquer->mergePartitionBitmaps(global_ctx->future_part->parts.front()->info.partition_id, global_ctx->future_part->parts);
+
+        if (global_ctx->part_bitmaps.size() != global_ctx->future_part->parts.size())
+            throw Exception(ErrorCodes::ABORTED, "The number of bitmaps is expected to be {}, but the actual number is {}.",
+                            global_ctx->future_part->parts.size(), global_ctx->part_bitmaps.size());
+
+        int64_t max_seq_id = 0;
+        int64_t max_update_id = 0;
+        for (const auto & part_bitmap : global_ctx->part_bitmaps)
+        {
+            max_seq_id = std::max(max_seq_id, part_bitmap->getSeqId());
+            max_update_id = std::max(max_update_id, part_bitmap->getUpdateSeqId());
+        }
+
+        global_ctx->new_part_bitmap = PartBitmap::create(max_seq_id, max_update_id);
+    }
+#endif
 
     auto object_columns = MergeTreeData::getConcreteObjectColumns(global_ctx->future_part->parts, global_ctx->metadata_snapshot->getColumns());
 
@@ -371,6 +406,13 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
         ctx->blocks_are_granules_size,
         global_ctx->context->getWriteSettings());
 
+    if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique &&
+        global_ctx->data->getSettings()->write_unique_id_log)
+    {
+        global_ctx->unique_buffer = data_part_storage->writeFile(IMergeTreeDataPart::KEY_ID_LOG_COMPRESS_BIN_FILE_NAME, DBMS_DEFAULT_BUFFER_SIZE, {});
+        global_ctx->unique_compressed_buffer = std::make_unique<CompressedWriteBuffer>(*global_ctx->unique_buffer);
+    }
+
     global_ctx->rows_written = 0;
     ctx->initial_reservation = global_ctx->space_reservation ? global_ctx->space_reservation->getSize() : 0;
 
@@ -458,6 +500,9 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::executeImpl()
             global_ctx->space_reservation->update(static_cast<size_t>((1. - progress) * ctx->initial_reservation));
         }
 
+        if (global_ctx->unique_compressed_buffer)
+            writeUniqueKeyLog(block);
+
         /// Need execute again
         return true;
     }
@@ -471,6 +516,38 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::executeImpl()
     if (ctx->need_remove_expired_values && global_ctx->ttl_merges_blocker->isCancelled())
         throw Exception(ErrorCodes::ABORTED, "Cancelled merging parts with expired TTL");
 
+    if (global_ctx->new_part_bitmap)
+    {
+        for (const auto & part_bitmap : global_ctx->part_bitmaps)
+            global_ctx->new_part_bitmap->bitmapOR(part_bitmap);
+
+        global_ctx->new_part_bitmap->serialize(global_ctx->new_data_part->getDataPartStoragePtr());
+    }
+
+    if (global_ctx->unique_compressed_buffer)
+    {
+        int32_t rows = 2;
+        global_ctx->unique_compressed_buffer->write(reinterpret_cast<char *>(&rows), sizeof(int32_t));
+
+        String key = LAST_BITMAP_SEQ_ID;
+        int32_t len = static_cast<int32_t>(key.size());
+        int64_t max_bitmap_seq_id = global_ctx->new_part_bitmap->getSeqId();
+        global_ctx->unique_compressed_buffer->write(reinterpret_cast<char *>(&len), sizeof(int32_t));
+        global_ctx->unique_compressed_buffer->write(key.data(), len);
+        global_ctx->unique_compressed_buffer->write(reinterpret_cast<char *>(&max_bitmap_seq_id), sizeof(int64_t));
+
+        key = LAST_UNIQUE_SEQ_ID;
+        /// LAST_UNIQUE_KEY_ID_ROCKSDB_KEY record is an unassigned id
+        int64_t max_unique_id = global_ctx->max_unique_id + 1;
+        len = static_cast<int32_t>(key.size());
+        global_ctx->unique_compressed_buffer->write(reinterpret_cast<char *>(&len), sizeof(int32_t));
+        global_ctx->unique_compressed_buffer->write(key.data(), len);
+        global_ctx->unique_compressed_buffer->write(reinterpret_cast<char *>(&max_unique_id), sizeof(int64_t));
+
+        global_ctx->unique_compressed_buffer->finalize();
+        global_ctx->unique_buffer->finalize();
+    }
+
     const auto data_settings = global_ctx->data->getSettings();
     const size_t sum_compressed_bytes_upper_bound = global_ctx->merge_list_element_ptr->total_size_bytes_compressed;
     ctx->need_sync = needSyncPart(ctx->sum_input_rows_upper_bound, sum_compressed_bytes_upper_bound, *data_settings);
@@ -478,6 +555,57 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::executeImpl()
     return false;
 }
 
+void MergeTask::ExecuteAndFinalizeHorizontalPart::writeUniqueKeyLog(DB::Block & block)
+{
+    if (block.rows() == 0)
+        return;
+
+#if USE_ROCKSDB
+    size_t unique_columns_count = global_ctx->data->merging_params.unique_columns.size();
+    /// reserve for partition_id, for backward compatibility
+    int slices_width = static_cast<int>(unique_columns_count + 1);
+
+    std::vector<rocksdb::Slice> slices;
+    slices.resize(block.rows() * slices_width);
+
+    for (size_t i = 0; i < unique_columns_count; ++i)
+    {
+        String unique_column_name = global_ctx->data->merging_params.unique_columns[i];
+        const IColumn * column = block.getByName(unique_column_name).column.get();
+
+        for (size_t j = 0; j < block.rows(); ++j)
+            slices[j * slices_width + i + 1] = {column->getDataAt(j).data, column->getDataAt(j).size};
+    }
+
+    UInt32 merge_timestamp = static_cast<UInt32>(global_ctx->time_of_merge);
+    String ver_column_name = global_ctx->data->merging_params.version_column;
+    ColumnPtr ver_column;
+    if (!ver_column_name.empty())
+        ver_column = block.getByName(ver_column_name).column;
+
+    ColumnPtr unique_id_column = block.getByName(UniqueKeyIdDescription::FILTER_COLUMN.name).column;
+
+    /// Convert rows to 32 bits, compatible with older file formats
+    uint32_t rows = static_cast<uint32_t>(block.rows());
+    writeBinary(rows, *global_ctx->unique_compressed_buffer);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        String key;
+        rocksdb::Slice s(rocksdb::SliceParts(slices.data() + i * slices_width, slices_width), &key);
+
+        UInt32 value[2];
+        value[0] = static_cast<UInt32>((*unique_id_column).getUInt(i));
+        value[1] = ver_column != nullptr ? static_cast<UInt32>((*ver_column).getUInt(i)) : merge_timestamp;
+
+        global_ctx->max_unique_id = std::max(global_ctx->max_unique_id, value[0]);
+
+        int32_t len = static_cast<int32_t>(key.size());
+        global_ctx->unique_compressed_buffer->write(reinterpret_cast<char *>(&len), sizeof(int32_t));
+        global_ctx->unique_compressed_buffer->write(key.data(), len);
+        global_ctx->unique_compressed_buffer->write(reinterpret_cast<char *>(&value), sizeof(value));
+    }
+#endif
+}
 
 bool MergeTask::VerticalMergeStage::prepareVerticalMergeForAllColumns() const
 {
@@ -889,17 +1017,34 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
     global_ctx->horizontal_stage_progress = std::make_unique<MergeStageProgress>(
         ctx->column_sizes ? ctx->column_sizes->keyColumnsWeight() : 1.0);
 
-    for (const auto & part : global_ctx->future_part->parts)
+    for (size_t part_num = 0; part_num < global_ctx->future_part->parts.size(); ++part_num)
     {
-        Pipe pipe = createMergeTreeSequentialSource(
-            *global_ctx->data,
-            global_ctx->storage_snapshot,
-            part,
-            global_ctx->merging_column_names,
-            ctx->read_with_direct_io,
-            /*take_column_types_from_storage=*/ true,
-            /*quiet=*/ false,
-            global_ctx->input_rows_filtered);
+        Pipe pipe;
+        if (global_ctx->data->merging_params.mode == MergeTreeData::MergingParams::Mode::Unique)
+        {
+            pipe = createMergeTreeSequentialSource(
+                *global_ctx->data,
+                global_ctx->storage_snapshot,
+                global_ctx->future_part->parts[part_num],
+                global_ctx->merging_column_names,
+                ctx->read_with_direct_io,
+                /*take_column_types_from_storage=*/ true,
+                /*quiet=*/ false,
+                global_ctx->input_rows_filtered,
+                global_ctx->part_bitmaps[part_num]);
+        }
+        else
+        {
+            pipe = createMergeTreeSequentialSource(
+                *global_ctx->data,
+                global_ctx->storage_snapshot,
+                global_ctx->future_part->parts[part_num],
+                global_ctx->merging_column_names,
+                ctx->read_with_direct_io,
+                /*take_column_types_from_storage=*/ true,
+                /*quiet=*/ false,
+                global_ctx->input_rows_filtered);
+        }
 
         if (global_ctx->metadata_snapshot->hasSortingKey())
         {
@@ -942,6 +1087,7 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
     switch (ctx->merging_params.mode)
     {
         case MergeTreeData::MergingParams::Ordinary:
+        case MergeTreeData::MergingParams::Unique:
             merged_transform = std::make_shared<MergingSortedTransform>(
                 header,
                 pipes.size(),

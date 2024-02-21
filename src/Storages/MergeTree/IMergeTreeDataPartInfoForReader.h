@@ -1,6 +1,7 @@
 #pragma once
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/AlterConversions.h>
+#include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/ColumnsDescription.h>
 #include <Core/NamesAndTypes.h>
 
@@ -39,6 +40,8 @@ public:
     virtual bool isProjectionPart() const = 0;
 
     virtual DataPartStoragePtr getDataPartStorage() const = 0;
+
+    virtual MergeTreeDataPartPtr getDataPartPtr() const = 0;
 
     virtual const NamesAndTypesList & getColumns() const = 0;
 

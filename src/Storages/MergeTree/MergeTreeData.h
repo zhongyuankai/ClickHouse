@@ -79,6 +79,9 @@ using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 using ManyExpressionActions = std::vector<ExpressionActionsPtr>;
 class MergeTreeDeduplicationLog;
 
+class MergeTreeDataUniquer;
+using MergeTreeDataUniquerPtr = std::shared_ptr<MergeTreeDataUniquer>;
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -337,6 +340,7 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
+            Unique              = 100,
         };
 
         Mode mode;
@@ -352,6 +356,9 @@ public:
 
         /// For Replacing and VersionedCollapsing mode. Can be empty for Replacing.
         String version_column;
+
+        /// For Unique mode. not empty
+        Names unique_columns;
 
         /// For Graphite mode.
         Graphite::Params graphite_params;
@@ -443,7 +450,7 @@ public:
 
     bool areAsynchronousInsertsEnabled() const override { return getSettings()->async_insert; }
 
-    bool supportsTrivialCountOptimization() const override { return !hasLightweightDeletedMask(); }
+    bool supportsTrivialCountOptimization() const override { return !hasLightweightDeletedMask() && merging_params.mode != MergingParams::Unique; }
 
     NamesAndTypesList getVirtuals() const override;
 
@@ -1075,6 +1082,8 @@ public:
     /// TODO: make enabled by default in the next release if no problems found.
     bool allowRemoveStaleMovingParts() const;
 
+    MergeTreeDataUniquerPtr getMergeTreeDataUniquer() const { return uniquer; }
+
 protected:
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataMergerMutator;
@@ -1167,6 +1176,9 @@ protected:
     ColumnsDescription object_columns;
 
     MergeTreePartsMover parts_mover;
+
+    /// For UniqueMergeTree
+    MergeTreeDataUniquerPtr uniquer;
 
     /// Executors are common for both ReplicatedMergeTree and plain MergeTree
     /// but they are being started and finished in derived classes, so let them be protected.

@@ -29,6 +29,7 @@
 #include <Storages/MergeTree/MergeTreePrefetchedReadPool.h>
 #include <Storages/MergeTree/MergeTreeSource.h>
 #include <Storages/MergeTree/MergeTreeThreadSelectProcessor.h>
+#include <Storages/MergeTree/MergeTreeDataUniquer.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/RequestResponse.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -943,6 +944,7 @@ static void addMergingFinal(
         switch (merging_params.mode)
         {
             case MergeTreeData::MergingParams::Ordinary:
+            case MergeTreeData::MergingParams::Unique:
                 return std::make_shared<MergingSortedTransform>(header, num_outputs,
                             sort_description, max_block_size, /*max_block_size_bytes=*/0, SortingQueueStrategy::Batch);
 
@@ -1522,11 +1524,13 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToReadImpl(
     size_t sum_ranges = 0;
     size_t sum_rows = 0;
 
+    std::unordered_set<String> result_partition;
     for (const auto & part : result.parts_with_ranges)
     {
         sum_ranges += part.ranges.size();
         sum_marks += part.getMarksCount();
         sum_rows += part.getRowsCount();
+        result_partition.insert(part.data_part->info.partition_id);
     }
 
     result.total_parts = total_parts;
@@ -1537,6 +1541,18 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToReadImpl(
     result.selected_marks_pk = sum_marks_pk;
     result.total_marks_pk = total_marks_pk;
     result.selected_rows = sum_rows;
+
+#if USE_ROCKSDB
+    /// Merge bitmap
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        MergeTreeDataUniquerPtr data_uniquer = data.getMergeTreeDataUniquer();
+        for (const auto & partition_id : result_partition)
+        {
+            data_uniquer->mergePartitionBitmaps(partition_id);
+        }
+    }
+#endif
 
     const auto & input_order_info = query_info.getInputOrderInfo();
     if (input_order_info)

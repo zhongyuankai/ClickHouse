@@ -153,6 +153,9 @@ public:
     /// Returns true if the storage supports deduplication of inserted data blocks.
     virtual bool supportsDeduplication() const { return false; }
 
+    /// For UniqueMergeTree, we only allow writing the leader replica.
+    virtual bool isOnlyWriteLeaderReplica() { return false; }
+
     /// Returns true if the blocks shouldn't be pushed to associated views on insert.
     virtual bool noPushingToViews() const { return false; }
 

@@ -8,6 +8,7 @@ namespace ProfileEvents
     extern const Event DistributedConnectionUsable;
     extern const Event DistributedConnectionMissingTable;
     extern const Event DistributedConnectionStaleReplica;
+    extern const Event DistributedConnectionNotLeader;
 }
 
 namespace DB
@@ -66,6 +67,14 @@ void ConnectionEstablisher::run(ConnectionEstablisher::TryResult & result, std::
             LOG_WARNING(LogToStr(fail_message, log), "There is no table {}.{} on server: {}",
                         backQuote(table_to_check->database), backQuote(table_to_check->table), result.entry->getDescription());
             ProfileEvents::increment(ProfileEvents::DistributedConnectionMissingTable);
+            return;
+        }
+
+        if (settings && settings->is_only_write_leader_replica && !table_status_it->second.isLeader())
+        {
+            LOG_TRACE(LogToStr(fail_message, log), "There is no leader of table {}.{} on server: {}",
+                        backQuote(table_to_check->database), backQuote(table_to_check->table), result.entry->getDescription());
+            ProfileEvents::increment(ProfileEvents::DistributedConnectionNotLeader);
             return;
         }
 

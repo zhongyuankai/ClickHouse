@@ -1727,6 +1727,11 @@ void StorageMergeTree::renameAndCommitEmptyParts(MutableDataPartsVector & new_pa
     if (deduplication_log)
         for (const auto & part : covered_parts)
             deduplication_log->dropPart(part->info);
+
+#if USE_ROCKSDB
+    if (uniquer)
+        uniquer->removePartBitmaps(covered_parts);
+#endif
 }
 
 void StorageMergeTree::truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr query_context, TableExclusiveLockHolder &)
@@ -1773,6 +1778,11 @@ void StorageMergeTree::truncate(const ASTPtr &, const StorageMetadataPtr &, Cont
                      transaction.getTID());
         }
     }
+
+#if USE_ROCKSDB
+    if (uniquer)
+        uniquer->dropAllPartitionUniquer();
+#endif
 
     /// Old parts are needed to be destroyed before clearing them from filesystem.
     clearOldMutations(true);
@@ -1847,6 +1857,7 @@ void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, Cont
 {
     {
         const auto * partition_ast = partition->as<ASTPartition>();
+        String current_partition_id;
 
         /// Asks to complete merges and does not allow them to start.
         /// This protects against "revival" of data for a removed partition after completion of merge.
@@ -1872,6 +1883,10 @@ void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, Cont
                 }
                 removePartsFromWorkingSet(txn.get(), parts_to_remove, true, data_parts_lock);
             }
+
+            if (!parts_to_remove.empty())
+                current_partition_id = parts_to_remove.front()->info.partition_id;
+
             dropPartsImpl(std::move(parts_to_remove), detach);
         }
         else
@@ -1914,6 +1929,9 @@ void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, Cont
             auto [new_data_parts, tmp_dir_holders] = createEmptyDataParts(*this, future_parts, txn);
             renameAndCommitEmptyParts(new_data_parts, transaction);
 
+            if (!parts.empty())
+                current_partition_id = parts.front()->info.partition_id;
+
             PartLog::addNewParts(query_context, PartLog::createPartLogEntries(new_data_parts, watch.elapsed(), profile_events_scope.getSnapshot()));
 
             const auto * op = detach ? "Detached" : "Dropped";
@@ -1921,6 +1939,11 @@ void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, Cont
                      op, parts.size(), future_parts.size(),
                      transaction.getTID());
         }
+
+#if USE_ROCKSDB
+        if (uniquer)
+            uniquer->dropPartitionUniquer(current_partition_id);
+#endif
     }
 
     /// Old parts are needed to be destroyed before clearing them from filesystem.
@@ -1951,6 +1974,11 @@ void StorageMergeTree::dropPartsImpl(DataPartsVector && parts_to_remove, bool de
         for (const auto & part : parts_to_remove)
             deduplication_log->dropPart(part->info);
     }
+
+#if USE_ROCKSDB
+    if (uniquer)
+        uniquer->removePartBitmaps(parts_to_remove);
+#endif
 
     if (detach)
         LOG_INFO(log, "Detached {} parts: [{}]", parts_to_remove.size(), fmt::join(getPartsNames(parts_to_remove), ", "));

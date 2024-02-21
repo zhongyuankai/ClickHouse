@@ -15,8 +15,8 @@ namespace ErrorCodes
 
 void TableStatus::write(WriteBuffer & out) const
 {
-    writeBinary(is_replicated, out);
-    if (is_replicated)
+    writeBinary(replica_status, out);
+    if (isReplicated())
     {
         writeVarUInt(absolute_delay, out);
     }
@@ -25,8 +25,8 @@ void TableStatus::write(WriteBuffer & out) const
 void TableStatus::read(ReadBuffer & in)
 {
     absolute_delay = 0;
-    readBinary(is_replicated, in);
-    if (is_replicated)
+    readBinary(replica_status, in);
+    if (isReplicated())
     {
         readVarUInt(absolute_delay, in);
     }

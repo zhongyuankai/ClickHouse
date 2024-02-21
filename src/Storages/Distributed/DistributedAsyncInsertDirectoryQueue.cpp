@@ -47,6 +47,7 @@ namespace ErrorCodes
 {
     extern const int INCORRECT_FILE_NAME;
     extern const int LOGICAL_ERROR;
+    extern const int ALL_CONNECTION_TRIES_FAILED;
 }
 
 
@@ -415,7 +416,28 @@ void DistributedAsyncInsertDirectoryQueue::processFile(std::string & file_path)
             storage.getContext()->getOpenTelemetrySpanLog());
 
         auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(distributed_header.insert_settings);
-        auto connection = pool->get(timeouts, &distributed_header.insert_settings);
+        IConnectionPool::Entry connection;
+        if (storage.isOnlyWriteLeaderReplica())
+        {
+            if (auto * pool_with_failover = dynamic_cast<ConnectionPoolWithFailover *>(pool.get()))
+            {
+                Settings insert_settings = distributed_header.insert_settings;
+                insert_settings.is_only_write_leader_replica = true;
+                auto results = pool_with_failover->getManyChecked(timeouts, &insert_settings, PoolMode::GET_ONE,
+                                                                  storage.getRemoteStorageID().getQualifiedName());
+
+                if (results.empty() || results[0].entry.isNull())
+                    throw Exception(ErrorCodes::ALL_CONNECTION_TRIES_FAILED,
+                                    "PoolWithFailoverBase::getMany() returned less than min_entries entries.");
+
+                connection = results[0].entry;
+            }
+            else
+                connection = pool->get(timeouts, &distributed_header.insert_settings);
+        }
+        else
+            connection = pool->get(timeouts, &distributed_header.insert_settings);
+
         LOG_DEBUG(log, "Sending `{}` to {} ({} rows, {} bytes)",
             file_path,
             connection->getDescription(),

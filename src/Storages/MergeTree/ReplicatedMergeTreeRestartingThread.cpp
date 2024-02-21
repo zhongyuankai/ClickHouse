@@ -141,7 +141,10 @@ bool ReplicatedMergeTreeRestartingThread::runImpl()
     storage.queue_updating_task->activateAndSchedule();
     storage.mutations_updating_task->activateAndSchedule();
     storage.mutations_finalizing_task->activateAndSchedule();
-    storage.merge_selecting_task->activateAndSchedule();
+
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+        storage.merge_selecting_task->activateAndSchedule();
+
     storage.cleanup_thread.start();
     storage.async_block_ids_cache.start();
     storage.part_check_thread.start();
@@ -173,6 +176,8 @@ bool ReplicatedMergeTreeRestartingThread::tryStartup()
             /// pullLogsToQueue() after we mark replica 'is_active' (and after we repair if it was lost);
             /// because cleanup_thread doesn't delete log_pointer of active replicas.
             storage.queue.pullLogsToQueue(zookeeper, {}, ReplicatedMergeTreeQueue::LOAD);
+
+            storage.startBeingLeader();
         }
         catch (...)
         {

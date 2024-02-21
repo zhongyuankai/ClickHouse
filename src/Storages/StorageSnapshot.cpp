@@ -1,5 +1,6 @@
 #include <Storages/StorageSnapshot.h>
 #include <Storages/LightweightDeleteDescription.h>
+#include <Storages/MergeTree/MergeTreeDataUniquer.h>
 #include <Storages/IStorage.h>
 #include <DataTypes/ObjectUtils.h>
 #include <DataTypes/NestedUtils.h>
@@ -24,6 +25,10 @@ void StorageSnapshot::init()
 
     if (storage.hasLightweightDeletedMask())
         system_columns[LightweightDeleteDescription::FILTER_COLUMN.name] = LightweightDeleteDescription::FILTER_COLUMN.type;
+
+    if (const auto * merge_tree = dynamic_cast<const MergeTreeData *>(&storage))
+        if (merge_tree->merging_params.mode == MergeTreeData::MergingParams::Unique)
+            system_columns[UniqueKeyIdDescription::FILTER_COLUMN.name] = UniqueKeyIdDescription::FILTER_COLUMN.type;
 }
 
 NamesAndTypesList StorageSnapshot::getColumns(const GetColumnsOptions & options) const

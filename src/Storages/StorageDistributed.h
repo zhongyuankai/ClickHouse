@@ -86,6 +86,8 @@ public:
     bool supportsDynamicSubcolumns() const override { return true; }
     StoragePolicyPtr getStoragePolicy() const override;
 
+    bool isOnlyWriteLeaderReplica() override;
+
     /// Do not apply moving to PREWHERE optimization for distributed tables,
     /// because we can't be sure that underlying table supports PREWHERE.
     bool canMoveConditionsToPrewhere() const override { return false; }
@@ -151,6 +153,8 @@ public:
     std::string getRemoteDatabaseName() const { return remote_database; }
     std::string getRemoteTableName() const { return remote_table; }
     ClusterPtr getCluster() const;
+
+    StorageID getRemoteStorageID() const { return {remote_database, remote_table}; }
 
     /// Used by InterpreterSystemQuery
     void flushClusterNodesAllData(ContextPtr context);
@@ -222,6 +226,9 @@ private:
     String remote_database;
     String remote_table;
     ASTPtr remote_table_function_ptr;
+
+    /// Used to ReplicatedUniqueMergeTree, only the leader can write.
+    std::weak_ptr<IStorage> inner_storage;
 
     Poco::Logger * log;
 

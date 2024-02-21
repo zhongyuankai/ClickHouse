@@ -86,6 +86,8 @@ struct Settings;
     M(UInt64, max_parts_in_total, 100000, "If more than this number active parts in all partitions in total, throw 'Too many parts ...' exception.", 0) \
     M(Bool, async_insert, false, "If true, data from INSERT query is stored in queue and later flushed to table in background.", 0) \
     M(Milliseconds, sleep_before_commit_local_part_in_replicated_table_ms, 0, "For testing. Do not change it.", 0) \
+    M(Bool, write_unique_id_log, false, "When writing, write the key_id_log.bin file to the disk for UniqueMergeTree, Compatible with older versions", 0) \
+    M(Bool, read_unique_id_log, false, "When recover rocksdb, read the key_id_log.bin file to the disk for UniqueMergeTree, Compatible with older versions", 0) \
     \
     /* Part removal settings. */ \
     M(UInt64, simultaneous_parts_removal_limit, 0, "Maximum number of parts to remove during one CleanupThread iteration (0 means unlimited).", 0) \
@@ -103,6 +105,7 @@ struct Settings;
     M(UInt64, prefer_fetch_merged_part_size_threshold, 10ULL * 1024 * 1024 * 1024, "If sum size of parts exceeds this threshold and time passed after replication log entry creation is greater than \"prefer_fetch_merged_part_time_threshold\", prefer fetching merged part from replica instead of doing merge locally. To speed up very long merges.", 0) \
     M(Seconds, execute_merges_on_single_replica_time_threshold, 0, "When greater than zero only a single replica starts the merge immediately, others wait up to that amount of time to download the result instead of doing merges locally. If the chosen replica doesn't finish the merge during that amount of time, fallback to standard behavior happens.", 0) \
     M(Seconds, remote_fs_execute_merges_on_single_replica_time_threshold, 3 * 60 * 60, "When greater than zero only a single replica starts the merge immediately if merged part on shared storage and 'allow_remote_fs_zero_copy_replication' is enabled.", 0) \
+    M(Bool, execute_merges_on_leader_replica, true, "Only works on UniqueMergeTree, Merge task can only be executed on the leader replica.", 0) \
     M(Seconds, try_fetch_recompressed_part_timeout, 7200, "Recompression works slow in most cases, so we don't start merge with recompression until this timeout and trying to fetch recompressed part from replica which assigned this merge with recompression.", 0) \
     M(Bool, always_fetch_merged_part, false, "If true, replica never merge parts and always download merged parts from other replicas.", 0) \
     M(UInt64, max_suspicious_broken_parts, 100, "Max broken parts, if more - deny automatic deletion.", 0) \
@@ -135,6 +138,7 @@ struct Settings;
     M(UInt64, vertical_merge_algorithm_min_rows_to_activate, 16 * 8192, "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", 0) \
     M(UInt64, vertical_merge_algorithm_min_bytes_to_activate, 0, "Minimal (approximate) uncompressed size in bytes in merging parts to activate Vertical merge algorithm.", 0) \
     M(UInt64, vertical_merge_algorithm_min_columns_to_activate, 11, "Minimal amount of non-PK columns to activate Vertical merge algorithm.", 0) \
+    M(UInt64, max_wait_processing_queue_milliseconds, 180 * 1000, "Maximum waiting time for replica synchronization to complete.", 0) \
     \
     /** Compatibility settings */ \
     M(Bool, allow_suspicious_indices, false, "Reject primary/secondary indexes and sorting keys with identical expressions", 0) \
@@ -202,6 +206,7 @@ struct Settings;
     M(Bool, in_memory_parts_insert_sync, false, "Obsolete setting, does nothing.", 0) \
     M(MaxThreads, max_part_loading_threads, 0, "Obsolete setting, does nothing.", 0) \
     M(MaxThreads, max_part_removal_threads, 0, "Obsolete setting, does nothing.", 0) \
+    M(Bool, partition_level_rocksdb, false, "Obsolete setting, does nothing", 0) \
     M(Int64, max_partitions_to_reserve, 0, "Obsolete setting, does nothing", 0) \
 
     /// Settings that should not change after the creation of a table.
