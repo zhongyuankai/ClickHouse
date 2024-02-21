@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
+#include <Storages/MergeTree/MergeTreeDataUniquer.h>
 #include <Columns/FilterDescription.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsCommon.h>
@@ -804,7 +805,8 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     MergeTreeRangeReader * prev_reader_,
     const PrewhereExprStep * prewhere_info_,
     bool last_reader_in_chain_,
-    const Names & non_const_virtual_column_names_)
+    const Names & non_const_virtual_column_names_,
+    const MergeTreeData * storage_)
     : merge_tree_reader(merge_tree_reader_)
     , index_granularity(&(merge_tree_reader->data_part_info_for_read->getIndexGranularity()))
     , prev_reader(prev_reader_)
@@ -844,6 +846,14 @@ MergeTreeRangeReader::MergeTreeRangeReader(
 
         if (step.remove_filter_column)
             result_sample_block.erase(step.filter_column_name);
+    }
+
+    if (storage_ != nullptr && storage_->merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+#if USE_ROCKSDB
+        auto uniquer = storage_->getMergeTreeDataUniquer();
+        part_bitmap = uniquer->getPartBitmap(merge_tree_reader->data_part_info_for_read->getDataPartPtr());
+#endif
     }
 }
 
@@ -1352,6 +1362,24 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
 
             if (!dummy_column.empty())
                 block.erase(dummy_column);
+        }
+
+        /// UniqueMergeTree filters data by bitmap index
+        if (part_bitmap != nullptr)
+        {
+            auto new_filter = ColumnUInt8::create(result.num_rows, 0);
+            IColumn::Filter & new_data = new_filter->getData();
+            size_t filter_column_pos = block.getPositionByName(prewhere_info->filter_column_name);
+            const auto & unique_id_column = typeid_cast<const ColumnUInt32 &>(*result.columns[filter_column_pos]).getData();
+            for (size_t idx = 0; idx < result.num_rows; ++idx)
+            {
+                UInt32 key_id = unique_id_column[idx];
+                if (key_id != 0xffffffff && part_bitmap->contains(key_id))
+                    new_data[idx] = 1;
+            }
+
+            block.erase(prewhere_info->filter_column_name);
+            block.insert({std::move(new_filter), std::make_shared<DataTypeUInt8>(), prewhere_info->filter_column_name});
         }
 
         result.additional_columns.clear();

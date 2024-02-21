@@ -28,6 +28,8 @@ public:
 
     DataPartStoragePtr getDataPartStorage() const override { return data_part->getDataPartStoragePtr(); }
 
+    MergeTreeDataPartPtr getDataPartPtr() const override { return data_part; }
+
     const NamesAndTypesList & getColumns() const override { return data_part->getColumns(); }
 
     const ColumnsDescription & getColumnsDescription() const override { return data_part->getColumnsDescription(); }

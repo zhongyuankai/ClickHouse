@@ -79,6 +79,17 @@ ReplicatedMergeMutateTaskBase::PrepareResult MergeFromLogEntryTask::prepare()
         std::optional<String> replica_to_execute_merge = storage.merge_strategy_picker.pickReplicaToExecuteMerge(entry);
         if (replica_to_execute_merge)
         {
+            if (replica_to_execute_merge.value().empty())
+            {
+                LOG_DEBUG(log, "Prefer fetching part {} from leader replica.", entry.new_part_name);
+
+                return PrepareResult{
+                    .prepared_successfully = false,
+                    .need_to_check_missing_part_in_fetch = true,
+                    .part_log_writer = {}
+                };
+            }
+
             LOG_DEBUG(log,
                 "Prefer fetching part {} from replica {} due to execute_merges_on_single_replica_time_threshold",
                 entry.new_part_name, replica_to_execute_merge.value());

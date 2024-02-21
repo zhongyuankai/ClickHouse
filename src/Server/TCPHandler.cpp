@@ -1013,11 +1013,11 @@ void TCPHandler::processTablesStatusRequest()
         TableStatus status;
         if (auto * replicated_table = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
         {
-            status.is_replicated = true;
+            status.replica_status = replicated_table->isLeader() ? 0x3 : 0x1;
             status.absolute_delay = static_cast<UInt32>(replicated_table->getAbsoluteDelay());
         }
         else
-            status.is_replicated = false;
+            status.replica_status = 0x0;
 
         response.table_states_by_id.emplace(table_name, std::move(status));
     }

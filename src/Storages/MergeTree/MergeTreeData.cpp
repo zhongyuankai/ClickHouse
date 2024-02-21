@@ -77,6 +77,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/MergeTree/MergeTreeDataPartBuilder.h>
+#include <Storages/MergeTree/MergeTreeDataUniquer.h>
 #include <Storages/MutationCommands.h>
 
 #include <boost/range/algorithm_ext/erase.hpp>
@@ -425,6 +426,11 @@ MergeTreeData::MergeTreeData(
         else
             background_moves_assignee.trigger();
     };
+
+#if USE_ROCKSDB
+    if (merging_params.mode == MergingParams::Unique)
+        uniquer = std::make_shared<MergeTreeDataUniquer>(*this);
+#endif
 }
 
 StoragePolicyPtr MergeTreeData::getStoragePolicy() const
@@ -796,7 +802,10 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
                         "Sign column for MergeTree cannot be specified "
                         "in modes except Collapsing or VersionedCollapsing.");
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
+    if (!version_column.empty() &&
+        mode != MergingParams::Replacing &&
+        mode != MergingParams::VersionedCollapsing &&
+        mode != MergingParams::Unique)
         throw Exception(ErrorCodes::LOGICAL_ERROR,
                         "Version column for MergeTree cannot be specified "
                         "in modes except Replacing or VersionedCollapsing.");
@@ -1062,6 +1071,7 @@ String MergeTreeData::MergingParams::getModeName() const
         case Replacing:     return "Replacing";
         case Graphite:      return "Graphite";
         case VersionedCollapsing: return "VersionedCollapsing";
+        case Unique:        return "Unique";
     }
 
     UNREACHABLE();
@@ -2321,6 +2331,11 @@ void MergeTreeData::removePartsFinally(const MergeTreeData::DataPartsVector & pa
             LOG_TEST(log, "removePartsFinally: removing {} from data_parts_indexes", (*it)->getNameWithState());
             data_parts_indexes.erase(it);
         }
+
+#if USE_ROCKSDB
+        if (uniquer)
+            uniquer->removePartBitmaps(parts);
+#endif
     }
 
     LOG_DEBUG(log, "Removing {} parts from memory: Parts: [{}]", parts.size(), fmt::join(parts, ", "));
@@ -2913,6 +2928,11 @@ void MergeTreeData::dropAllData()
         if (write_ahead_log)
             write_ahead_log->shutdown();
     }
+
+#if USE_ROCKSDB
+    if (uniquer)
+        uniquer->dropAllPartitionUniquer();
+#endif
 
     /// Tables in atomic databases have UUID and stored in persistent locations.
     /// No need to clear caches (that are keyed by filesystem path) because collision is not possible.
@@ -3999,6 +4019,11 @@ void MergeTreeData::removePartsFromWorkingSetImmediatelyAndSetTemporaryState(con
         LOG_TEST(log, "removePartsFromWorkingSetImmediatelyAndSetTemporaryState: removing {} from data_parts_indexes", part->getNameWithState());
         data_parts_indexes.erase(it_part);
     }
+
+#if USE_ROCKSDB
+    if (uniquer)
+        uniquer->removePartBitmaps(remove);
+#endif
 }
 
 void MergeTreeData::removePartsFromWorkingSet(
@@ -4188,6 +4213,10 @@ void MergeTreeData::forcefullyMovePartToDetachedAndRemoveFromMemory(const MergeT
     asMutableDeletingPart(part)->renameToDetached(prefix);
     LOG_TEST(log, "forcefullyMovePartToDetachedAndRemoveFromMemory: removing {} from data_parts_indexes", part->getNameWithState());
     data_parts_indexes.erase(it_part);
+#if USE_ROCKSDB
+    if (uniquer)
+        uniquer->removePartBitmaps({part});
+#endif
 
     if (restore_covered && part->info.level == 0)
     {
@@ -4667,6 +4696,10 @@ void MergeTreeData::swapActivePart(MergeTreeData::DataPartPtr part_copy, DataPar
 
             modifyPartState(original_active_part, DataPartState::DeleteOnDestroy);
             LOG_TEST(log, "swapActivePart: removing {} from data_parts_indexes", (*active_part_it)->getNameWithState());
+#if USE_ROCKSDB
+            if (uniquer)
+                uniquer->removePartBitmaps({*active_part_it});
+#endif
             data_parts_indexes.erase(active_part_it);
 
             LOG_TEST(log, "swapActivePart: inserting {} into data_parts_indexes", part_copy->getNameWithState());
@@ -5127,6 +5160,9 @@ Pipe MergeTreeData::alterPartition(
     PartitionCommandsResultInfo result;
     for (const PartitionCommand & command : commands)
     {
+        if (merging_params.mode == MergingParams::Unique && command.type != PartitionCommand::DROP_PARTITION)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "UniqueMergeTree currently only supports DROP PARTITION");
+
         PartitionCommandsResultInfo current_command_results;
         switch (command.type)
         {
@@ -7136,7 +7172,8 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
     ProjectionCandidate * selected_candidate = nullptr;
     size_t min_sum_marks = std::numeric_limits<size_t>::max();
     if (settings.optimize_use_implicit_projections && metadata_snapshot->minmax_count_projection
-        && !has_lightweight_delete_parts.load(std::memory_order_relaxed)) /// Disable ReadFromStorage for parts with lightweight.
+        && !has_lightweight_delete_parts.load(std::memory_order_relaxed) /// Disable ReadFromStorage for parts with lightweight.
+        && merging_params.mode != MergeTreeData::MergingParams::Unique) /// Disable ReadFromStorage for parts with UniquerMergeTree.
         add_projection_candidate(*metadata_snapshot->minmax_count_projection, true);
     std::optional<ProjectionCandidate> minmax_count_projection_candidate;
     if (!candidates.empty())
@@ -8241,7 +8278,10 @@ NamesAndTypesList MergeTreeData::getVirtuals() const
         NameAndTypePair("_partition_value", getPartitionValueType()),
         NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
         NameAndTypePair("_part_offset", std::make_shared<DataTypeUInt64>()),
-        LightweightDeleteDescription::FILTER_COLUMN,
+        LightweightDeleteDescription::FILTER_COLUMN
+#if USE_ROCKSDB
+        , UniqueKeyIdDescription::FILTER_COLUMN
+#endif
     };
 }
 

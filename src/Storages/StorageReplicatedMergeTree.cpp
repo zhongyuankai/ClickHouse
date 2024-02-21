@@ -31,7 +31,6 @@
 #include <Storages/MergeTree/DataPartStorageOnDiskFull.h>
 #include <Storages/MergeTree/extractZkPathFromCreateQuery.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-#include <Storages/MergeTree/LeaderElection.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergeFromLogEntryTask.h>
 #include <Storages/MergeTree/MergeList.h>
@@ -1709,6 +1708,14 @@ bool StorageReplicatedMergeTree::executeLogEntry(LogEntry & entry)
     if (entry.type == LogEntry::DROP_RANGE || entry.type == LogEntry::DROP_PART)
     {
         executeDropRange(entry);
+
+#if USE_ROCKSDB
+        if (entry.type == LogEntry::DROP_RANGE && uniquer != nullptr)
+        {
+            auto drop_range_info = MergeTreePartInfo::fromPartName(entry.new_part_name, format_version);
+            uniquer->dropPartitionUniquer(drop_range_info.partition_id);
+        }
+#endif
         return true;
     }
 
@@ -3926,14 +3933,70 @@ void StorageReplicatedMergeTree::startBeingLeader()
         return;
     }
 
-    zkutil::checkNoOldLeaders(log, *zookeeper, fs::path(zookeeper_path) / "leader_election");
+    if (merging_params.mode == MergingParams::Unique)
+    {
+        LOG_INFO(log, "Start leader election");
+        auto handler = [this]() -> bool
+        {
+            try
+            {
+                UInt64 max_wait_milliseconds = getSettings()->max_wait_processing_queue_milliseconds;
+                if (!waitForProcessingQueue(max_wait_milliseconds, SyncReplicaMode::LIGHTWEIGHT))
+                {
+                    LOG_WARNING(log, "Failed to become leader, Waiting for replica queue processing timeout, max wait time {} milliseconds.", max_wait_milliseconds);
+                    return is_leader;
+                }
 
-    LOG_INFO(log, "Became leader");
-    is_leader = true;
+                auto queue_status = queue.getStatus();
+                if (queue_status.inserts_in_queue == 0)
+                {
+                    LOG_INFO(log, "Became leader");
+                    is_leader = true;
+                    merge_selecting_task->activateAndSchedule();
+                }
+                else
+                    LOG_WARNING(log, "Failed to become leader, there are {} GET_PART tasks in the queue", queue_status.inserts_in_queue);
+
+                return is_leader;
+            }
+            catch (...)
+            {
+                LOG_ERROR(log, "Failed to become leader, wait for processing queue exception: {}", DB::getCurrentExceptionMessage(true));
+                return is_leader;
+            }
+        };
+
+        try
+        {
+            leader_election = std::make_shared<zkutil::LeaderElection>(
+                getContext()->getSchedulePool(),
+                zookeeper_path + "/leader_election",
+                *current_zookeeper,    /// current_zookeeper lives for the lifetime of leader_election,
+                ///  since before changing `current_zookeeper`, `leader_election` object is destroyed in `partialShutdown` method.
+                handler,
+                replica_name);
+        }
+        catch (...)
+        {
+            leader_election = nullptr;
+            throw;
+        }
+    }
+    else
+    {
+        zkutil::checkNoOldLeaders(log, *zookeeper, fs::path(zookeeper_path) / "leader_election");
+
+        LOG_INFO(log, "Became leader");
+        is_leader = true;
+    }
+
 }
 
 void StorageReplicatedMergeTree::stopBeingLeader()
 {
+    if (leader_election)
+        leader_election = nullptr;
+
     if (!is_leader)
     {
         LOG_TRACE(log, "stopBeingLeader called but we are not a leader already");
@@ -3942,6 +4005,9 @@ void StorageReplicatedMergeTree::stopBeingLeader()
 
     LOG_INFO(log, "Stopped being leader");
     is_leader = false;
+
+    if (merging_params.mode == MergingParams::Unique)
+        merge_selecting_task->deactivate();
 }
 
 ConnectionTimeouts StorageReplicatedMergeTree::getFetchPartHTTPTimeouts(ContextPtr local_context)
@@ -4844,8 +4910,6 @@ void StorageReplicatedMergeTree::startupImpl(bool from_attach_thread)
         getContext()->getInterserverIOHandler().addEndpoint(
             data_parts_exchange_ptr->getId(getEndpointName()), data_parts_exchange_ptr);
 
-        startBeingLeader();
-
         /// Activate replica in a separate thread if we are not calling from attach thread
         restarting_thread.start(/*schedule=*/!from_attach_thread);
 
@@ -4952,6 +5016,8 @@ void StorageReplicatedMergeTree::partialShutdown()
     partial_shutdown_event.set();
     queue.notifySubscribersOnPartialShutdown();
     replica_is_active_node = nullptr;
+
+    stopBeingLeader();
 
     LOG_TRACE(log, "Waiting for threads to finish");
     merge_selecting_task->deactivate();
@@ -5280,6 +5346,10 @@ SinkToStoragePtr StorageReplicatedMergeTree::write(const ASTPtr & /*query*/, con
             ErrorCodes::TABLE_IS_READ_ONLY,
             "Table is in readonly mode since table metadata was not found in zookeeper: replica_path={}",
             replica_path);
+
+    /// For Unique, only the leader node can write.
+    if (merging_params.mode == MergingParams::Unique && !is_leader)
+        throw Exception(ErrorCodes::NOT_A_LEADER, "Write cannot be done on this replica because it is not a leader");
 
     const auto storage_settings_ptr = getSettings();
     const Settings & query_settings = local_context->getSettingsRef();

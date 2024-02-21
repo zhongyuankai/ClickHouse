@@ -1,6 +1,7 @@
 #pragma once
 #include <Processors/ISource.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/PartBitmap.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <memory>
@@ -18,7 +19,8 @@ Pipe createMergeTreeSequentialSource(
     bool read_with_direct_io,
     bool take_column_types_from_storage,
     bool quiet,
-    std::shared_ptr<std::atomic<size_t>> filtered_rows_count);
+    std::shared_ptr<std::atomic<size_t>> filtered_rows_count,
+    PartBitmap::Ptr part_bitmap = nullptr);
 
 class QueryPlan;
 

@@ -299,7 +299,30 @@ NamesAndTypesList StorageDistributed::getVirtuals() const
         NameAndTypePair("_part_offset", std::make_shared<DataTypeUInt64>()),
         NameAndTypePair("_row_exists", std::make_shared<DataTypeUInt8>()),
         NameAndTypePair("_shard_num", std::make_shared<DataTypeUInt32>()), /// deprecated
+        NameAndTypePair("_unique_key_id", std::make_shared<DataTypeUInt32>()),
     };
+}
+
+bool StorageDistributed::isOnlyWriteLeaderReplica()
+{
+    if (auto inner_storage_ptr = inner_storage.lock(); inner_storage_ptr)
+        return inner_storage_ptr->isOnlyWriteLeaderReplica();
+    else if (!remote_database.empty() && !remote_table.empty())
+    {
+        StorageID remote_table_id = {remote_database, remote_table};
+        StoragePtr remote_table_ptr = DatabaseCatalog::instance().tryGetTable(remote_table_id, getContext());
+        if (!remote_table_ptr)
+        {
+            /// TODO When there is no remote table on this node时，DistributedAsyncInsertDirectoryQueue will not be sent to the leader node.
+            return false;
+        }
+        else
+        {
+            inner_storage = remote_table_ptr;
+            return remote_table_ptr->isOnlyWriteLeaderReplica();
+        }
+    }
+    return false;
 }
 
 StorageDistributed::StorageDistributed(

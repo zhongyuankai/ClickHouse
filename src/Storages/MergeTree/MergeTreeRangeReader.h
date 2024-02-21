@@ -4,6 +4,7 @@
 #include <Columns/ColumnsCommon.h>
 #include <Columns/FilterDescription.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/PartBitmap.h>
 
 namespace DB
 {
@@ -13,12 +14,14 @@ class ColumnVector;
 using ColumnUInt8 = ColumnVector<UInt8>;
 
 class IMergeTreeReader;
+class MergeTreeData;
 class MergeTreeIndexGranularity;
 struct PrewhereInfo;
 using PrewhereInfoPtr = std::shared_ptr<PrewhereInfo>;
 
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
+
 
 struct PrewhereExprStep
 {
@@ -102,7 +105,8 @@ public:
         MergeTreeRangeReader * prev_reader_,
         const PrewhereExprStep * prewhere_info_,
         bool last_reader_in_chain_,
-        const Names & non_const_virtual_column_names);
+        const Names & non_const_virtual_column_names,
+        const MergeTreeData * storage_ = nullptr);
 
     MergeTreeRangeReader() = default;
 
@@ -326,6 +330,8 @@ private:
     bool last_reader_in_chain = false;
     bool is_initialized = false;
     Names non_const_virtual_column_names;
+
+    PartBitmap::Ptr part_bitmap;
 
     Poco::Logger * log = &Poco::Logger::get("MergeTreeRangeReader");
 };

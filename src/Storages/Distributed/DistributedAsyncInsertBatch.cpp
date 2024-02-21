@@ -11,6 +11,7 @@
 namespace CurrentMetrics
 {
     extern const Metric DistributedSend;
+    extern const int ALL_CONNECTION_TRIES_FAILED;
 }
 
 namespace DB
@@ -220,7 +221,28 @@ void DistributedAsyncInsertBatch::sendBatch()
             if (!remote)
             {
                 auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(distributed_header.insert_settings);
-                connection = parent.pool->get(timeouts);
+
+                if (parent.storage.isOnlyWriteLeaderReplica())
+                {
+                    if (auto * pool_with_failover = dynamic_cast<ConnectionPoolWithFailover *>(parent.pool.get()))
+                    {
+                        Settings insert_settings = distributed_header.insert_settings;
+                        insert_settings.is_only_write_leader_replica = true;
+                        auto results = pool_with_failover->getManyChecked(timeouts, &insert_settings, PoolMode::GET_ONE,
+                                                                          parent.storage.getRemoteStorageID().getQualifiedName());
+
+                        if (results.empty() || results[0].entry.isNull())
+                            throw Exception(ErrorCodes::ALL_CONNECTION_TRIES_FAILED,
+                                            "PoolWithFailoverBase::getMany() returned less than min_entries entries.");
+
+                        connection = results[0].entry;
+                    }
+                    else
+                        connection = parent.pool->get(timeouts);
+                }
+                else
+                    connection = parent.pool->get(timeouts);
+
                 compression_expected = connection->getCompression() == Protocol::Compression::Enable;
 
                 LOG_DEBUG(parent.log, "Sending a batch of {} files to {} ({} rows, {} bytes).",

@@ -839,6 +839,15 @@ NameSet IMergeTreeDataPart::getFileNamesWithoutChecksums() const
     if (getDataPartStorage().exists(METADATA_VERSION_FILE_NAME))
         result.emplace(METADATA_VERSION_FILE_NAME);
 
+    if (getDataPartStorage().exists(BITMAP_BIN_FILE_NAME))
+        result.emplace(BITMAP_BIN_FILE_NAME);
+
+    if (getDataPartStorage().exists(KEY_ID_LOG_BIN_FILE_NAME))
+        result.emplace(KEY_ID_LOG_BIN_FILE_NAME);
+
+    if (getDataPartStorage().exists(KEY_ID_LOG_COMPRESS_BIN_FILE_NAME))
+        result.emplace(KEY_ID_LOG_COMPRESS_BIN_FILE_NAME);
+
     return result;
 }
 

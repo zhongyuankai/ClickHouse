@@ -1,6 +1,7 @@
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/DataPartStorageOnDiskFull.h>
+#include <Storages/MergeTree/MergeTreeDataUniquer.h>
 #include <Columns/ColumnConst.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/Exception.h>
@@ -322,6 +323,7 @@ Block MergeTreeDataWriter::mergeBlock(
         {
             /// There is nothing to merge in single block in ordinary MergeTree
             case MergeTreeData::MergingParams::Ordinary:
+            case MergeTreeData::MergingParams::Unique:
                 return nullptr;
             case MergeTreeData::MergingParams::Replacing:
                 return std::make_shared<ReplacingSortedAlgorithm>(
@@ -505,6 +507,14 @@ MergeTreeDataWriter::TemporaryPart MergeTreeDataWriter::writeTempPartImpl(
     if (data.storage_settings.get()->assign_part_uuids)
         new_data_part->uuid = UUIDHelpers::generateV4();
 
+    /// Add column _unique_key_id to UniqueMergeTree
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        /// create unique_key_id column and add to block
+        block.insert({UniqueKeyIdDescription::FILTER_COLUMN.type, UniqueKeyIdDescription::FILTER_COLUMN.name});
+        columns.push_back({UniqueKeyIdDescription::FILTER_COLUMN.name, UniqueKeyIdDescription::FILTER_COLUMN.type});
+    }
+
     const auto & data_settings = data.getSettings();
 
     SerializationInfo::Settings settings{data_settings->ratio_of_defaults_for_sparse_serialization, true};
@@ -559,6 +569,12 @@ MergeTreeDataWriter::TemporaryPart MergeTreeDataWriter::writeTempPartImpl(
         updateTTL(ttl_entry, new_data_part->ttl_infos, new_data_part->ttl_infos.recompression_ttl[ttl_entry.result_column], block, false);
 
     new_data_part->ttl_infos.update(move_ttl_infos);
+
+#if USE_ROCKSDB
+    /// For UniqueMergeTree
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+        data.getMergeTreeDataUniquer()->uniqueBlock(block, new_data_part);
+#endif
 
     /// This effectively chooses minimal compression method:
     ///  either default lz4 or compression method with zero thresholds on absolute and relative part size.

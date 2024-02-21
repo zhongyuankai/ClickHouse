@@ -173,6 +173,8 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         merging_params.mode = MergeTreeData::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
         merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
+    else if (name_part == "Unique")
+        merging_params.mode = MergeTreeData::MergingParams::Unique;
     else if (!name_part.empty())
         throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown storage {}",
             args.engine_name + verbose_help_message);
@@ -240,6 +242,11 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         case MergeTreeData::MergingParams::VersionedCollapsing: {
             add_mandatory_param("sign column");
             add_mandatory_param("version");
+            break;
+        }
+        case MergeTreeData::MergingParams::Unique: {
+            add_optional_param("unique columns");
+            add_optional_param("version");
             break;
         }
     }
@@ -501,6 +508,21 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// sorting key.
         merging_param_key_arg = merging_params.version_column;
     }
+    else if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        if (arg_cnt - arg_num == 2 && !engine_args[arg_cnt - 1]->as<ASTLiteral>() && is_extended_storage_def)
+        {
+            if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.version_column))
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Version column name must be an identifier {}", verbose_help_message);
+            --arg_cnt;
+        }
+
+        if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
+        {
+            merging_params.unique_columns = extractColumnNames(engine_args[arg_cnt - 1]);
+            --arg_cnt;
+        }
+    }
 
     String date_column_name;
 
@@ -683,6 +705,29 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (arg_num != arg_cnt)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Wrong number of engine arguments.");
 
+    if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        if (merging_params.unique_columns.empty())
+            merging_params.unique_columns = metadata.sorting_key.column_names;
+
+        for (const auto & name : merging_params.unique_columns)
+        {
+            if (!metadata.getColumns().has(name))
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "unique key {} is not a original field.", name);
+
+            const auto & column = metadata.getColumns().get(name);
+            if (column.type->isNullable())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "unique key {} should not be nullable.", name);
+        }
+
+        if (metadata.getColumns().has(merging_params.version_column))
+        {
+            const auto & column = metadata.getColumns().get(merging_params.version_column);
+            if (column.type->isNullable())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "version column {} should not be nullable.", merging_params.version_column);
+        }
+    }
+
     if (replicated)
     {
         bool need_check_table_structure = true;
@@ -736,6 +781,9 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("SummingMergeTree", create, features);
     factory.registerStorage("GraphiteMergeTree", create, features);
     factory.registerStorage("VersionedCollapsingMergeTree", create, features);
+#if USE_ROCKSDB
+    factory.registerStorage("UniqueMergeTree", create, features);
+#endif
 
     features.supports_replication = true;
     features.supports_deduplication = true;
@@ -748,6 +796,9 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("ReplicatedSummingMergeTree", create, features);
     factory.registerStorage("ReplicatedGraphiteMergeTree", create, features);
     factory.registerStorage("ReplicatedVersionedCollapsingMergeTree", create, features);
+#if USE_ROCKSDB
+    factory.registerStorage("ReplicatedUniqueMergeTree", create, features);
+#endif
 }
 
 }

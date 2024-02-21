@@ -658,13 +658,14 @@ void DistributedSink::writeAsyncImpl(const Block & block, size_t shard_id)
 
     if (shard_info.hasInternalReplication())
     {
-        if (shard_info.isLocal() && settings.prefer_localhost_replica)
+        bool write_leader = storage.isOnlyWriteLeaderReplica();
+        if (shard_info.isLocal() && settings.prefer_localhost_replica && !write_leader)
             /// Prefer insert into current instance directly
             writeToLocal(shard_info, block_to_send, shard_info.getLocalNodeCount());
         else
         {
             const auto & path = shard_info.insertPathForInternalReplication(
-                settings.prefer_localhost_replica,
+                !write_leader && settings.prefer_localhost_replica,
                 settings.use_compact_format_in_distributed_parts_names);
             if (path.empty())
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Directory name for async inserts is empty");

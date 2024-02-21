@@ -1,6 +1,7 @@
 #pragma once
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeDataUniquer.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/RequestResponse.h>
@@ -107,16 +108,16 @@ protected:
     injectVirtualColumns(Block & block, size_t row_count, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns);
 
 protected:
-    static void initializeRangeReadersImpl(
-         MergeTreeRangeReader & range_reader,
-         std::deque<MergeTreeRangeReader> & pre_range_readers,
-         const PrewhereExprInfo & prewhere_actions,
-         IMergeTreeReader * reader,
-         bool has_lightweight_delete,
-         const MergeTreeReaderSettings & reader_settings,
-         const std::vector<std::unique_ptr<IMergeTreeReader>> & pre_reader_for_step,
-         const PrewhereExprStep & lightweight_delete_filter_step,
-         const Names & non_const_virtual_column_names);
+    void initializeRangeReadersImpl(
+         MergeTreeRangeReader & range_reader_,
+         std::deque<MergeTreeRangeReader> & pre_range_readers_,
+         const PrewhereExprInfo & prewhere_actions_,
+         IMergeTreeReader * reader_,
+         bool has_lightweight_delete_,
+         const MergeTreeReaderSettings & reader_settings_,
+         const std::vector<std::unique_ptr<IMergeTreeReader>> & pre_reader_for_step_,
+         const PrewhereExprStep & lightweight_delete_filter_step_,
+         const Names & non_const_virtual_column_names_);
 
     /// Sets up data readers for each step of prewhere and where
     void initializeMergeTreeReadersForCurrentTask(
@@ -147,6 +148,17 @@ protected:
         .need_filter = true,
         .perform_alter_conversions = true,
     };
+
+    /// This step is added when the part belongs to unique merge tree
+    const PrewhereExprStep unique_bitmap_filter_step
+        {
+            .type = PrewhereExprStep::Filter,
+            .actions = nullptr,
+            .filter_column_name = UniqueKeyIdDescription::FILTER_COLUMN.name,
+            .remove_filter_column = true,
+            .need_filter = true,
+            .perform_alter_conversions = true,
+        };
 
     PrewhereInfoPtr prewhere_info;
     ExpressionActionsSettings actions_settings;

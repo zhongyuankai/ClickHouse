@@ -435,6 +435,11 @@ public:
 
     static inline constexpr auto METADATA_VERSION_FILE_NAME = "metadata_version.txt";
 
+    /// Used for UniqueMergeTree.
+    static inline constexpr auto BITMAP_BIN_FILE_NAME = "bitmap.bin";
+    static inline constexpr auto KEY_ID_LOG_BIN_FILE_NAME = "key_id_log.bin";
+    static inline constexpr auto KEY_ID_LOG_COMPRESS_BIN_FILE_NAME = "key_id_log.bin.tar";
+
     /// One of part files which is used to check how many references (I'd like
     /// to say hardlinks, but it will confuse even more) we have for the part
     /// for zero copy replication. Sadly it's very complex.

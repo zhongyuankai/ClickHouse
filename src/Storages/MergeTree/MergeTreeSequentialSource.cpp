@@ -2,6 +2,7 @@
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Storages/MergeTree/LoadedMergeTreeDataPartInfoForReader.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
+#include <Storages/MergeTree/PartBitmap.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/QueryPlan/ISourceStep.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -19,6 +20,22 @@ namespace ErrorCodes
     extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
+static void filterColumns(Columns & columns, const IColumn::Filter & filter)
+{
+    for (auto & column : columns)
+    {
+        if (column)
+        {
+            column = column->filter(filter, -1);
+
+            if (column->empty())
+            {
+                columns.clear();
+                return;
+            }
+        }
+    }
+}
 
 /// Lightweight (in terms of logic) stream for reading single part from MergeTree
 /// NOTE:
@@ -36,7 +53,8 @@ public:
         bool apply_deleted_mask,
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
-        bool quiet = false);
+        bool quiet = false,
+        PartBitmap::Ptr part_bitmap_ = nullptr);
 
     ~MergeTreeSequentialSource() override;
 
@@ -77,6 +95,9 @@ private:
     /// current row at which we stop reading
     size_t current_row = 0;
 
+    /// For UniqueMergeTree
+    PartBitmap::Ptr part_bitmap;
+
     /// Closes readers and unlock part locks
     void finish();
 };
@@ -91,7 +112,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     bool apply_deleted_mask,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
-    bool quiet)
+    bool quiet,
+    PartBitmap::Ptr part_bitmap_)
     : ISource(storage_snapshot_->getSampleBlockForColumns(columns_to_read_))
     , storage(storage_)
     , storage_snapshot(storage_snapshot_)
@@ -100,6 +122,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     , read_with_direct_io(read_with_direct_io_)
     , mark_ranges(std::move(mark_ranges_))
     , mark_cache(storage.getContext()->getMarkCache())
+    , part_bitmap(part_bitmap_)
 {
     if (!quiet)
     {
@@ -161,7 +184,7 @@ try
 {
     const auto & header = getPort().getHeader();
 
-    if (!isCancelled() && current_row < data_part->rows_count)
+    while (!isCancelled() && current_row < data_part->rows_count)
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(current_mark);
         bool continue_reading = (current_mark != 0);
@@ -172,9 +195,6 @@ try
 
         if (rows_read)
         {
-            current_row += rows_read;
-            current_mark += (rows_to_read == rows_read);
-
             bool should_evaluate_missing_defaults = false;
             reader->fillMissingColumns(columns, should_evaluate_missing_defaults, rows_read);
 
@@ -184,6 +204,38 @@ try
             }
 
             reader->performRequiredConversions(columns);
+
+            if (part_bitmap)
+            {
+                size_t pos = 0;
+                for (const auto & entry : sample)
+                {
+                    if (entry.name == UniqueKeyIdDescription::FILTER_COLUMN.name)
+                        break;
+
+                    pos++;
+                }
+                const auto & unique_id_column = typeid_cast<const ColumnUInt32 &>(*columns[pos]).getData();
+                MutableColumnPtr filter_column = DataTypeUInt8().createColumn();
+                auto & filter_column_data = typeid_cast<ColumnUInt8 &>(*filter_column).getData();
+                filter_column_data.resize_fill(rows_read, 0);
+                for (size_t idx = 0; idx < rows_read; ++idx)
+                {
+                    UInt32 unique_id = unique_id_column[idx];
+                    if (unique_id != 0xffffffff && part_bitmap->contains(unique_id))
+                        filter_column_data[idx] = 1;
+                }
+
+                filterColumns(columns, filter_column_data);
+            }
+
+            current_row += rows_read;
+            current_mark += (rows_to_read == rows_read);
+
+            if (columns.empty())
+                continue;
+
+            size_t valid_size = !part_bitmap ? rows_read : columns[0]->size();
 
             /// Reorder columns and fill result block.
             size_t num_columns = sample.size();
@@ -199,13 +251,11 @@ try
                 ++it;
             }
 
-            return Chunk(std::move(res_columns), rows_read);
+            return Chunk(std::move(res_columns), valid_size);
         }
     }
-    else
-    {
-        finish();
-    }
+
+    finish();
 
     return {};
 }
@@ -244,7 +294,8 @@ Pipe createMergeTreeSequentialSource(
     bool read_with_direct_io,
     bool take_column_types_from_storage,
     bool quiet,
-    std::shared_ptr<std::atomic<size_t>> filtered_rows_count)
+    std::shared_ptr<std::atomic<size_t>> filtered_rows_count,
+    PartBitmap::Ptr part_bitmap)
 {
     /// The part might have some rows masked by lightweight deletes
     const bool need_to_filter_deleted_rows = data_part->hasLightweightDelete();
@@ -252,9 +303,17 @@ Pipe createMergeTreeSequentialSource(
     if (need_to_filter_deleted_rows)
         columns.emplace_back(LightweightDeleteDescription::FILTER_COLUMN.name);
 
+    /// UniqueMergeTree needs to filter data through bitmap index
+    if (part_bitmap != nullptr)
+    {
+        auto it = std::find(columns.begin(), columns.end(), UniqueKeyIdDescription::FILTER_COLUMN.name);
+        if (it == columns.end())
+            columns.emplace_back(UniqueKeyIdDescription::FILTER_COLUMN.name);
+    }
+
     auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
         storage, storage_snapshot, data_part, columns, std::optional<MarkRanges>{},
-        /*apply_deleted_mask=*/ false, read_with_direct_io, take_column_types_from_storage, quiet);
+        /*apply_deleted_mask=*/ false, read_with_direct_io, take_column_types_from_storage, quiet, part_bitmap);
 
     Pipe pipe(std::move(column_part_source));
 
