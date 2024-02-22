@@ -21,12 +21,14 @@ RUN apt-get update \
         zstd \
     --yes --no-install-recommends
 
-RUN pip3 install numpy scipy pandas Jinja2
+RUN pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple numpy scipy pandas Jinja2
 
 ARG odbc_driver_url="https://github.com/ClickHouse/clickhouse-odbc/releases/download/v1.1.4.20200302/clickhouse-odbc-1.1.4-Linux.tar.gz"
 
+COPY clickhouse-odbc-1.1.4-Linux.tar.gz /
+
 RUN mkdir -p /tmp/clickhouse-odbc-tmp \
-  && wget -nv -O - ${odbc_driver_url} | tar --strip-components=1 -xz -C /tmp/clickhouse-odbc-tmp \
+  && tar --strip-components=1 -xzf clickhouse-odbc-1.1.4-Linux.tar.gz -C /tmp/clickhouse-odbc-tmp \
   && cp /tmp/clickhouse-odbc-tmp/lib64/*.so /usr/local/lib/ \
   && odbcinst -i -d -f /tmp/clickhouse-odbc-tmp/share/doc/clickhouse-odbc/config/odbcinst.ini.sample \
   && odbcinst -i -s -l -f /tmp/clickhouse-odbc-tmp/share/doc/clickhouse-odbc/config/odbc.ini.sample \

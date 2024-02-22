@@ -32,7 +32,8 @@ ENV MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 
-ENV TZ=Europe/Amsterdam
+#ENV TZ=Europe/Amsterdam
+ENV TZ=Asia/Shanghai
 RUN ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
 
 # This script is used to setup realtime export of server logs from the CI into external ClickHouse cluster:

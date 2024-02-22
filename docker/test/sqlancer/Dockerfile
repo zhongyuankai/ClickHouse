@@ -1,5 +1,5 @@
 # docker build -t clickhouse/sqlancer-test .
-FROM ubuntu:22.04
+FROM docker.nju.edu.cn/ubuntu:22.04
 
 # ARG for quick switch to a given ubuntu mirror
 ARG apt_archive="http://archive.ubuntu.com"
@@ -11,11 +11,14 @@ RUN apt-get update --yes && \
 
 # We need to get the repository's HEAD each time despite, so we invalidate layers' cache
 ARG CACHE_INVALIDATOR=0
+COPY settings-didi.xml /
+COPY sqlancer-main.tar.gz /
 RUN mkdir /sqlancer && \
-	wget -q -O- https://github.com/sqlancer/sqlancer/archive/main.tar.gz | \
-		tar zx -C /sqlancer && \
+#	wget -q -O- https://github.com/sqlancer/sqlancer/archive/main.tar.gz | \
+#		tar zx -C /sqlancer && \
+        tar -zxf sqlancer-main.tar.gz -C /sqlancer && \
 	cd /sqlancer/sqlancer-main && \
-	mvn --no-transfer-progress package -DskipTests && \
+	mvn --no-transfer-progress package -DskipTests -s /settings-didi.xml && \
 	rm -r /root/.m2
 
 COPY run.sh /

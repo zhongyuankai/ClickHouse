@@ -17,14 +17,16 @@ RUN apt-get update --yes \
             sudo \
     && apt-get clean
 
-RUN pip3 install \
+RUN pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple \
     numpy \
     pyodbc \
     deepdiff
 
 ARG odbc_repo="https://github.com/ClickHouse/clickhouse-odbc.git"
 
-RUN git clone --recursive ${odbc_repo} \
+COPY clickhouse-odbc.tar.gz /
+RUN tar -zxf clickhouse-odbc.tar.gz \
+#RUN git clone --recursive ${odbc_repo} \
     && mkdir -p /clickhouse-odbc/build \
     && cmake -S /clickhouse-odbc -B /clickhouse-odbc/build \
     && ls /clickhouse-odbc/build/driver \
@@ -40,7 +42,10 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 ARG sqllogic_test_repo="https://github.com/gregrahn/sqllogictest.git"
 
-RUN git clone --recursive ${sqllogic_test_repo}
+#RUN git clone --recursive ${sqllogic_test_repo}
+
+COPY sqllogictest.tar.gz /
+RUN tar -zxf sqllogictest.tar.gz
 
 COPY run.sh /
 CMD ["/bin/bash", "/run.sh"]
