@@ -45,16 +45,21 @@ RUN apt-get update -y \
             p7zip-full \
     && apt-get clean
 
-RUN pip3 install numpy scipy pandas Jinja2
+RUN pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple numpy scipy pandas Jinja2
+
+COPY clickhouse-odbc-1.1.4-Linux.tar.gz /
 
 RUN mkdir -p /tmp/clickhouse-odbc-tmp \
-   && wget -nv -O - ${odbc_driver_url} | tar --strip-components=1 -xz -C /tmp/clickhouse-odbc-tmp \
+#   && wget -nv -O - ${odbc_driver_url} | tar --strip-components=1 -xz -C /tmp/clickhouse-odbc-tmp \
+   && tar --strip-components=1 -zxf clickhouse-odbc-1.1.4-Linux.tar.gz -C /tmp/clickhouse-odbc-tmp \
    && cp /tmp/clickhouse-odbc-tmp/lib64/*.so /usr/local/lib/ \
    && odbcinst -i -d -f /tmp/clickhouse-odbc-tmp/share/doc/clickhouse-odbc/config/odbcinst.ini.sample \
    && odbcinst -i -s -l -f /tmp/clickhouse-odbc-tmp/share/doc/clickhouse-odbc/config/odbc.ini.sample \
-   && rm -rf /tmp/clickhouse-odbc-tmp
+   && rm -rf /tmp/clickhouse-odbc-tmp \
+   && rm clickhouse-odbc-1.1.4-Linux.tar.gz
 
-ENV TZ=Europe/Amsterdam
+#ENV TZ=Europe/Amsterdam
+ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 ENV NUM_TRIES=1
@@ -81,8 +86,8 @@ ENV MINIO_ROOT_USER="clickhouse"
 ENV MINIO_ROOT_PASSWORD="clickhouse"
 ENV EXPORT_S3_STORAGE_POLICIES=1
 
-RUN npm install -g azurite \
-    && npm install -g tslib
+RUN npm install -g azurite --registry=http://mirrors.cloud.tencent.com/npm/ \
+    && npm install -g tslib --registry=http://mirrors.cloud.tencent.com/npm/
 
 COPY run.sh /
 COPY setup_minio.sh /

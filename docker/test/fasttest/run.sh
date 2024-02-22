@@ -270,7 +270,7 @@ case "$stage" in
     ls -la
     ;&
 "clone_root")
-    clone_root
+#   clone_root
 
     # Pass control to the script from cloned sources, unless asked otherwise.
     if ! [ -v FASTTEST_LOCAL_SCRIPT ]
@@ -296,9 +296,10 @@ case "$stage" in
     # See the compatibility hacks in `clone_root` stage above. Remove at the same time,
     # after Nov 1, 2020.
     cd "$FASTTEST_WORKSPACE"
-    clone_submodules 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee "$FASTTEST_OUTPUT/submodule_log.txt"
+#    clone_submodules 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee "$FASTTEST_OUTPUT/submodule_log.txt"
     ;&
 "run_cmake")
+    cd "$FASTTEST_SOURCE"
     run_cmake
     ;&
 "build")

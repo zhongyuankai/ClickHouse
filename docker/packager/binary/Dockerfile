@@ -10,19 +10,24 @@ ENV CXX=clang++-${LLVM_VERSION}
 # THE MOST HEAVY OPERATION MUST BE THE FIRST IN THE CACHE
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # libtapi is required to support .tbh format from recent MacOS SDKs
-RUN git clone https://github.com/tpoechtrager/apple-libtapi.git \
+COPY apple-libtapi.tar.gz /
+COPY cctools-port.tar.gz /
+
+RUN tar -zxf apple-libtapi.tar.gz \
     && cd apple-libtapi \
-    && git checkout 15dfc2a8c9a2a89d06ff227560a69f5265b692f9 \
+#    && git checkout 15dfc2a8c9a2a89d06ff227560a69f5265b692f9 \
     && INSTALLPREFIX=/cctools ./build.sh \
     && ./install.sh \
     && cd .. \
-    && rm -rf apple-libtapi
+    && rm -rf apple-libtapi \
+    && rm apple-libtapi.tar.gz
 
 # Build and install tools for cross-linking to Darwin (x86-64)
 # Build and install tools for cross-linking to Darwin (aarch64)
-RUN git clone https://github.com/tpoechtrager/cctools-port.git \
+#RUN git clone https://github.com/tpoechtrager/cctools-port.git \
+RUN tar -zxf  cctools-port.tar.gz \
     && cd cctools-port/cctools \
-    && git checkout 2a3e1c2a6ff54a30f898b70cfb9ba1692a55fad7 \
+#    && git checkout 2a3e1c2a6ff54a30f898b70cfb9ba1692a55fad7 \
     && ./configure --prefix=/cctools --with-libtapi=/cctools \
         --target=x86_64-apple-darwin \
     && make install -j$(nproc) \
@@ -31,7 +36,8 @@ RUN git clone https://github.com/tpoechtrager/cctools-port.git \
         --target=aarch64-apple-darwin \
     && make install -j$(nproc) \
     && cd ../.. \
-    && rm -rf cctools-port
+    && rm -rf cctools-port \
+    && rm cctools-port.tar.gz
 
 # !!!!!!!!!!!
 # END COMPILE
@@ -45,7 +51,9 @@ ENV CXX=clang++-${LLVM_VERSION}
 ENV RUSTUP_HOME=/rust/rustup
 ENV CARGO_HOME=/rust/cargo
 ENV PATH="/rust/cargo/bin:${PATH}"
-RUN curl https://sh.rustup.rs -sSf | bash -s -- -y && \
+ENV RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static
+COPY rustup-init.sh /
+RUN bash rustup-init.sh -y && \
     chmod 777 -R /rust && \
     rustup toolchain install nightly-2023-07-04 && \
     rustup default nightly-2023-07-04 && \
@@ -77,10 +85,20 @@ RUN add-apt-repository ppa:ubuntu-toolchain-r/test --yes \
     && rm -rf /var/lib/apt/lists
 
 # Download toolchain and SDK for Darwin
-RUN curl -sL -O https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
+#RUN curl -sL -O https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
+
+COPY MacOSX11.0.sdk.tar.xz .
 
 # Download and install mold 2.0 for s390x build
-RUN curl -Lo /tmp/mold.tar.gz "https://github.com/rui314/mold/releases/download/v2.0.0/mold-2.0.0-x86_64-linux.tar.gz" \
+#RUN curl -Lo /tmp/mold.tar.gz "https://github.com/rui314/mold/releases/download/v2.0.0/mold-2.0.0-x86_64-linux.tar.gz" \
+#    && mkdir /tmp/mold \
+#    && tar -xzf /tmp/mold.tar.gz -C /tmp/mold \
+#    && cp -r /tmp/mold/mold*/* /usr \
+#    && rm -rf /tmp/mold \
+#    && rm /tmp/mold.tar.gz
+
+COPY mold-2.0.0-x86_64-linux.tar.gz /tmp/
+RUN mv /tmp/mold-2.0.0-x86_64-linux.tar.gz /tmp/mold.tar.gz \
     && mkdir /tmp/mold \
     && tar -xzf /tmp/mold.tar.gz -C /tmp/mold \
     && cp -r /tmp/mold/mold*/* /usr \
@@ -88,18 +106,28 @@ RUN curl -Lo /tmp/mold.tar.gz "https://github.com/rui314/mold/releases/download/
     && rm /tmp/mold.tar.gz
 
 # Architecture of the image when BuildKit/buildx is used
-ARG TARGETARCH
-ARG NFPM_VERSION=2.20.0
+#ARG TARGETARCH
+#ARG NFPM_VERSION=2.20.0
+#
+#RUN arch=${TARGETARCH:-amd64} \
+#    && curl -Lo /tmp/nfpm.deb "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${arch}.deb" \
+#    && dpkg -i /tmp/nfpm.deb \
+#    && rm /tmp/nfpm.deb
 
-RUN arch=${TARGETARCH:-amd64} \
-    && curl -Lo /tmp/nfpm.deb "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${arch}.deb" \
+COPY nfpm_amd64.deb /tmp/
+RUN mv /tmp/nfpm_amd64.deb /tmp/nfpm.deb \
     && dpkg -i /tmp/nfpm.deb \
     && rm /tmp/nfpm.deb
 
-ARG GO_VERSION=1.19.10
+#ARG GO_VERSION=1.19.10
 # We need go for clickhouse-diagnostics
-RUN arch=${TARGETARCH:-amd64} \
-    && curl -Lo /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" \
+#RUN arch=${TARGETARCH:-amd64} \
+#    && curl -Lo /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" \
+#    && tar -xzf /tmp/go.tgz -C /usr/local/ \
+#    && rm /tmp/go.tgz
+
+COPY go1.19.10.linux-amd64.tar.gz /tmp/
+RUN mv /tmp/go1.19.10.linux-amd64.tar.gz /tmp/go.tgz \
     && tar -xzf /tmp/go.tgz -C /usr/local/ \
     && rm /tmp/go.tgz
 
@@ -107,10 +135,19 @@ ENV PATH="$PATH:/usr/local/go/bin"
 ENV GOPATH=/workdir/go
 ENV GOCACHE=/workdir/
 
-ARG CLANG_TIDY_SHA1=c191254ea00d47ade11d7170ef82fe038c213774
-RUN curl -Lo /usr/bin/clang-tidy-cache \
-        "https://raw.githubusercontent.com/matus-chochlik/ctcache/$CLANG_TIDY_SHA1/clang-tidy-cache" \
-    && chmod +x /usr/bin/clang-tidy-cache
+#RUN go env -w GO111MODULE=on
+#RUN go env -w GOPROXY=https://goproxy.cn,direct
+
+ENV GO111MODULE=on
+ENV GOPROXY=https://goproxy.cn,direct
+
+#ARG CLANG_TIDY_SHA1=c191254ea00d47ade11d7170ef82fe038c213774
+#RUN curl -Lo /usr/bin/clang-tidy-cache \
+#        "https://raw.githubusercontent.com/matus-chochlik/ctcache/$CLANG_TIDY_SHA1/clang-tidy-cache" \
+#    && chmod +x /usr/bin/clang-tidy-cache
+
+COPY clang-tidy-cache /usr/bin/
+RUN chmod +x /usr/bin/clang-tidy-cache
 
 COPY --from=cctools /cctools /cctools
 

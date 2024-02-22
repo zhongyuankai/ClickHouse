@@ -22,14 +22,14 @@ else
     chmod +x /clickhouse
 fi
 
-if [[ -f "/clickhouse" ]]; then
-    echo "/clickhouse exists"
+if [[ -f "/programs/clickhouse" ]]; then
+    echo "/programs/clickhouse exists"
 else
     exit 1
 fi
 
 cd /workspace
-/clickhouse server -P /workspace/clickhouse-server.pid -L /workspace/clickhouse-server.log -E /workspace/clickhouse-server.log.err --daemon
+/programs/clickhouse server -P /workspace/clickhouse-server.pid -L /workspace/clickhouse-server.log -E /workspace/clickhouse-server.log.err --daemon
 
 for _ in $(seq 1 60); do if [[ $(wget -q 'localhost:8123' -O-) == 'Ok.' ]]; then break ; else sleep 1; fi ; done
 

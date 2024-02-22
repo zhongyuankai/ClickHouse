@@ -65,13 +65,15 @@ def pre_build(repo_path: Path, env_variables: List[str]) -> None:
             raise BuildException(
                 "shallow repository is not suitable for performance builds"
             )
-        if current_branch != "master":
-            cmd = (
-                f"git -C {repo_path} fetch --no-recurse-submodules "
-                "--no-tags origin master:master"
-            )
-            logging.info("Getting master branch for performance artifact: '%s'", cmd)
-            subprocess.check_call(cmd, shell=True)
+
+
+#        if current_branch != "master":
+#            cmd = (
+#                f"git -C {repo_path} fetch --no-recurse-submodules "
+#                "--no-tags origin master:master"
+#            )
+#            logging.info("Getting master branch for performance artifact: '%s'", cmd)
+#            subprocess.check_call(cmd, shell=True)
 
 
 def run_docker_image_with_env(

@@ -33,20 +33,21 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/debconf /tmp/*
 
-RUN pip3 install pycurl
+RUN pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple pycurl
 
 # Architecture of the image when BuildKit/buildx is used
 ARG TARGETARCH
 
 # Install MySQL ODBC driver from RHEL rpm
 # For reference https://downloads.mysql.com/archives/c-odbc/ RHEL
+COPY mysql-connector-odbc-8.0.32-1.el9.x86_64.rpm /
 RUN arch=${TARGETARCH:-amd64} \
   && case $arch in \
       amd64) rarch=x86_64 ;; \
       arm64) rarch=aarch64 ;; \
     esac \
   && cd /tmp \
-  && curl -o mysql-odbc.rpm "https://cdn.mysql.com/archives/mysql-connector-odbc-8.0/mysql-connector-odbc-8.0.32-1.el9.${rarch}.rpm" \
+  && mv /mysql-connector-odbc-8.0.32-1.el9.x86_64.rpm mysql-odbc.rpm \
   && rpm2archive mysql-odbc.rpm \
   && tar xf mysql-odbc.rpm.tgz -C / ./usr/lib64/ \
   && rm mysql-odbc.rpm mysql-odbc.rpm.tgz \
@@ -57,9 +58,9 @@ RUN arch=${TARGETARCH:-amd64} \
 # Unfortunately this is required for a single test for conversion data from zookeeper to clickhouse-keeper.
 # ZooKeeper is not started by default, but consumes some space in containers.
 # 777 perms used to allow anybody to start/stop ZooKeeper
+COPY apache-zookeeper-3.6.3-bin.tar.gz /
 ENV ZOOKEEPER_VERSION='3.6.3'
-RUN curl "https://archive.apache.org/dist/zookeeper/zookeeper-${ZOOKEEPER_VERSION}/apache-zookeeper-${ZOOKEEPER_VERSION}-bin.tar.gz" | \
-      tar -C opt -zxv && \
+RUN tar -C opt -zxf apache-zookeeper-3.6.3-bin.tar.gz && \
   mv /opt/apache-zookeeper-${ZOOKEEPER_VERSION}-bin /opt/zookeeper && \
   chmod -R 777 /opt/zookeeper && \
   echo $'tickTime=2500 \n\

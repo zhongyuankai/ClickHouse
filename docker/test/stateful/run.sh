@@ -73,7 +73,10 @@ start
 setup_logs_replication
 
 # shellcheck disable=SC2086 # No quotes because I want to split it into words.
-/s3downloader --url-prefix "$S3_URL" --dataset-names $DATASETS
+#/s3downloader --url-prefix "$S3_URL" --dataset-names $DATASETS
+tar -xf /dataset/hits_v1.tar -C /var/lib/clickhouse
+tar -xf /dataset/visits_v1.tar -C /var/lib/clickhouse
+
 chmod 777 -R /var/lib/clickhouse
 clickhouse-client --query "SHOW DATABASES"
 

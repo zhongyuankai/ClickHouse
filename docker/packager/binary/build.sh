@@ -148,23 +148,23 @@ then
     #   for a given nominal SHA, but it is not accessible outside Yandex.
     # This is why we add this repository snapshot from CI to the performance test
     # package.
-    mkdir "$PERF_OUTPUT"/ch
-    # Copy .git only, but skip modules, using tar
-    tar c -C /build/ --exclude='.git/modules/**' .git | tar x -C "$PERF_OUTPUT"/ch
-    # Create branch pr and origin/master to have them for the following performance comparison
-    git -C "$PERF_OUTPUT"/ch branch pr
-    git -C "$PERF_OUTPUT"/ch fetch --no-tags --no-recurse-submodules --depth 50 origin master:origin/master
-    # Clean remote, to not have it stale
-    git -C "$PERF_OUTPUT"/ch remote | xargs -n1 git -C "$PERF_OUTPUT"/ch remote remove
-    # And clean all tags
-    echo "Deleting $(git -C "$PERF_OUTPUT"/ch tag | wc -l) tags"
-    git -C "$PERF_OUTPUT"/ch tag | xargs git -C "$PERF_OUTPUT"/ch tag -d >/dev/null
-    git -C "$PERF_OUTPUT"/ch reset --soft pr
-    git -C "$PERF_OUTPUT"/ch log -5
-    (
-        cd "$PERF_OUTPUT"/..
-        tar -cv --zstd -f /output/performance.tar.zst output
-    )
+#    mkdir "$PERF_OUTPUT"/ch
+#    # Copy .git only, but skip modules, using tar
+#    tar c -C /build/ --exclude='.git/modules/**' .git | tar x -C "$PERF_OUTPUT"/ch
+#    # Create branch pr and origin/master to have them for the following performance comparison
+#    git -C "$PERF_OUTPUT"/ch branch pr
+#    git -C "$PERF_OUTPUT"/ch fetch --no-tags --no-recurse-submodules --depth 50 origin master:origin/master
+#    # Clean remote, to not have it stale
+#    git -C "$PERF_OUTPUT"/ch remote | xargs -n1 git -C "$PERF_OUTPUT"/ch remote remove
+#    # And clean all tags
+#    echo "Deleting $(git -C "$PERF_OUTPUT"/ch tag | wc -l) tags"
+#    git -C "$PERF_OUTPUT"/ch tag | xargs git -C "$PERF_OUTPUT"/ch tag -d >/dev/null
+#    git -C "$PERF_OUTPUT"/ch reset --soft pr
+#    git -C "$PERF_OUTPUT"/ch log -5
+#    (
+#        cd "$PERF_OUTPUT"/..
+#        tar -cv --zstd -f /output/performance.tar.zst output
+#    )
 fi
 
 # May be set for performance test.

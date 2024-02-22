@@ -31,7 +31,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install Jinja2
+RUN pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple Jinja2
 
 COPY * /
 

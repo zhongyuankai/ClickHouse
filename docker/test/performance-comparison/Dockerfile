@@ -33,7 +33,7 @@ RUN apt-get update \
             cargo \
             ripgrep \
             zstd \
-    && pip3 --no-cache-dir install 'clickhouse-driver==0.2.1' scipy \
+    && pip3 --no-cache-dir install -i https://pypi.tuna.tsinghua.edu.cn/simple 'clickhouse-driver==0.2.1' scipy \
     && apt-get purge --yes python3-dev g++ \
     && apt-get autoremove --yes \
     && apt-get clean \

@@ -13,7 +13,7 @@ RUN apt-get update --yes \
             sudo \
     && apt-get clean
 
-RUN pip3 install \
+RUN pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple \
     pyyaml \
     clickhouse-driver
 
@@ -27,4 +27,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 COPY run.sh /
 COPY test.py /
+#COPY server.crt /
+#COPY server.key /
 CMD ["/bin/bash", "/run.sh"]
+#CMD ["/bin/bash"]

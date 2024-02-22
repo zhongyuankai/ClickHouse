@@ -6,6 +6,9 @@ set -e
 set -u
 set -o pipefail
 
+PR_TO_TEST=${SHA_TO_TEST:=""}
+SHA_TO_TEST=${SHA_TO_TEST:=""}
+
 BINARY_TO_DOWNLOAD=${BINARY_TO_DOWNLOAD:="clang-16_debug_none_unsplitted_disable_False_binary"}
 BINARY_URL_TO_DOWNLOAD=${BINARY_URL_TO_DOWNLOAD:="https://clickhouse-builds.s3.amazonaws.com/$PR_TO_TEST/$SHA_TO_TEST/clickhouse_build_check/$BINARY_TO_DOWNLOAD/clickhouse"}
 
@@ -21,9 +24,9 @@ function wget_with_retry
     return 1
 }
 
-wget_with_retry "$BINARY_URL_TO_DOWNLOAD"
-chmod +x clickhouse
-./clickhouse install --noninteractive
+#wget_with_retry "$BINARY_URL_TO_DOWNLOAD"
+#chmod +x clickhouse
+./binary/clickhouse install --noninteractive
 
 echo "
 users:

@@ -1,5 +1,5 @@
 # docker build -t clickhouse/test-util .
-FROM ubuntu:22.04
+FROM docker.nju.edu.cn/ubuntu:22.04
 
 # ARG for quick switch to a given ubuntu mirror
 ARG apt_archive="http://archive.ubuntu.com"
@@ -70,12 +70,13 @@ RUN ln -s /usr/bin/llvm-symbolizer-${LLVM_VERSION} /usr/bin/llvm-symbolizer
 # https://salsa.debian.org/pkg-llvm-team/llvm-toolchain/-/commit/992e52c0b156a5ba9c6a8a54f8c4857ddd3d371d
 RUN sed -i '/_IMPORT_CHECK_FILES_FOR_\(mlir-\|llvm-bolt\|merge-fdata\|MLIR\)/ {s|^|#|}' /usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm/LLVMExports-*.cmake
 
+COPY ccache-4.6.1.tar.xz /
+COPY ccache-4.6.1.tar.xz.asc /
+
 ARG CCACHE_VERSION=4.6.1
 RUN mkdir /tmp/ccache \
     && cd /tmp/ccache \
-    && curl -L \
-        -O https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION.tar.xz \
-        -O https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION.tar.xz.asc \
+    && mv /ccache-4.6.1.tar.xz* . \
     && gpg --recv-keys --keyserver hkps://keyserver.ubuntu.com 5A939A71A46792CF57866A51996DDA075594ADB8 \
     && gpg --verify ccache-4.6.1.tar.xz.asc \
     && tar xf ccache-$CCACHE_VERSION.tar.xz \
@@ -92,6 +93,9 @@ RUN mkdir /tmp/ccache \
     && cd / \
     && rm -rf /tmp/ccache
 
+COPY sccache-v0.5.4-x86_64-unknown-linux-musl.tar.gz /tmp/
+COPY sccache-v0.5.4-aarch64-unknown-linux-musl.tar.gz /tmp/
+
 ARG TARGETARCH
 ARG SCCACHE_VERSION=v0.5.4
 ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
@@ -102,8 +106,8 @@ RUN arch=${TARGETARCH:-amd64} \
     amd64) rarch=x86_64 ;; \
     arm64) rarch=aarch64 ;; \
   esac \
-  && curl -Ls "https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-$rarch-unknown-linux-musl.tar.gz" | \
-    tar xz -C /tmp \
+  && cd /tmp \
+  && tar -zxf sccache-$SCCACHE_VERSION-$rarch-unknown-linux-musl.tar.gz \
   && mv "/tmp/sccache-$SCCACHE_VERSION-$rarch-unknown-linux-musl/sccache" /usr/bin \
   && rm "/tmp/sccache-$SCCACHE_VERSION-$rarch-unknown-linux-musl" -r
 

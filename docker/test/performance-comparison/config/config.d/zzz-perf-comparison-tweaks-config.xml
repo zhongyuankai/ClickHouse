@@ -6,7 +6,7 @@
     <tcp_with_proxy_port remove="remove"/>
     <keeper_server remove="remove"/>
     <zookeeper remove="remove"/>
-    <listen_host>::</listen_host>
+    <listen_host>0.0.0.0</listen_host>
 
     <logger>
         <console>true</console>
