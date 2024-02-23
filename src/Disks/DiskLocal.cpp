@@ -220,6 +220,35 @@ std::optional<UInt64> DiskLocal::tryReserve(UInt64 bytes)
     return {};
 }
 
+UInt64 DiskLocal::getAvailableSpaceByFS() const
+{
+    /// we use f_bavail, because part of b_free space is
+    /// available for superuser only and for system purposes
+    struct statvfs fs;
+    if (name == "default") /// for default disk we get space from path/data/
+        fs = getStatVFS((fs::path(disk_path) / "data/").string());
+    else
+        fs = getStatVFS(disk_path);
+    UInt64 total_size = fs.f_bavail * fs.f_frsize;
+    if (total_size < keep_free_space_bytes)
+        return 0;
+    return total_size - keep_free_space_bytes;
+}
+
+void DiskLocal::updateAvailableSpace() noexcept
+{
+    try
+    {
+        available_space_bytes = getAvailableSpaceByFS();
+        LOG_TRACE(logger, "Disk {} update available space {} from the statvfs.", disk_path, ReadableSize(available_space_bytes));
+    }
+    catch (...)
+    {
+        available_space_bytes = 0;
+        tryLogCurrentException(logger, "Update available space failed");
+    }
+}
+
 static UInt64 getTotalSpaceByName(const String & name, const String & disk_path, UInt64 keep_free_space_bytes)
 {
     struct statvfs fs;
@@ -244,17 +273,11 @@ std::optional<UInt64> DiskLocal::getAvailableSpace() const
 {
     if (broken || readonly)
         return 0;
-    /// we use f_bavail, because part of b_free space is
-    /// available for superuser only and for system purposes
-    struct statvfs fs;
-    if (name == "default") /// for default disk we get space from path/data/
-        fs = getStatVFS((fs::path(disk_path) / "data/").string());
-    else
-        fs = getStatVFS(disk_path);
-    UInt64 total_size = fs.f_bavail * fs.f_frsize;
-    if (total_size < keep_free_space_bytes)
-        return 0;
-    return total_size - keep_free_space_bytes;
+
+    if (name == "default" || !disk_checker)
+        return getAvailableSpaceByFS();
+
+    return available_space_bytes;
 }
 
 std::optional<UInt64> DiskLocal::getUnreservedSpace() const

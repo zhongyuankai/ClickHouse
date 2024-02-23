@@ -23,6 +23,12 @@ catch (...)
     /// Suspicion of the broken part. A part is added to the queue for verification.
     if (getCurrentExceptionCode() != ErrorCodes::MEMORY_LIMIT_EXCEEDED)
         storage.reportBrokenPart(data_part);
+
+    if (storage.getSettings()->skip_broken_part)
+    {
+        task = nullptr;
+        return false;
+    }
     throw;
 }
 

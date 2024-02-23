@@ -43,6 +43,7 @@ public:
     const MergeTreeDataPartChecksums & getChecksums() const override { return data_part->checksums; }
 
     void reportBroken() override { data_part->storage.reportBrokenPart(data_part); }
+    bool skipBroken() override { return data_part->storage.getSettings()->skip_broken_part; }
 
     size_t getMarksCount() const override { return data_part->getMarksCount(); }
 

@@ -69,6 +69,8 @@ public:
     virtual String getTableName() const = 0;
 
     virtual void reportBroken() = 0;
+
+    virtual bool skipBroken() = 0;
 };
 
 using MergeTreeDataPartInfoForReaderPtr = std::shared_ptr<IMergeTreeDataPartInfoForReader>;

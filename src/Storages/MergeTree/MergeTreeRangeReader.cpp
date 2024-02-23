@@ -296,7 +296,6 @@ size_t MergeTreeRangeReader::Stream::finalize(Columns & columns)
     return read_rows;
 }
 
-
 void MergeTreeRangeReader::ReadResult::addGranule(size_t num_rows_)
 {
     rows_per_granule.push_back(num_rows_);
@@ -920,6 +919,14 @@ size_t MergeTreeRangeReader::Stream::ceilRowsToCompleteGranules(size_t rows_num)
 bool MergeTreeRangeReader::isCurrentRangeFinished() const
 {
     return prev_reader ? prev_reader->isCurrentRangeFinished() : stream.isFinished();
+}
+
+void MergeTreeRangeReader::finish()
+{
+    if (prev_reader)
+        prev_reader->finish();
+
+    stream.finish();
 }
 
 

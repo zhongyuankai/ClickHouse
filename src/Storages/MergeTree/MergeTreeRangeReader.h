@@ -116,6 +116,8 @@ public:
     bool isCurrentRangeFinished() const;
     bool isInitialized() const { return is_initialized; }
 
+    void finish();
+
 private:
     /// Accumulates sequential read() requests to perform a large read instead of multiple small reads
     class DelayedStream

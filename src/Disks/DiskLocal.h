@@ -137,6 +137,10 @@ protected:
 private:
     std::optional<UInt64> tryReserve(UInt64 bytes);
 
+    UInt64 getAvailableSpaceByFS() const;
+
+    void updateAvailableSpace() noexcept;
+
     /// Setup disk for healthy check.
     /// Throw exception if it's not possible to setup necessary files and directories.
     void setup();
@@ -152,6 +156,8 @@ private:
 
     UInt64 reserved_bytes = 0;
     UInt64 reservation_count = 0;
+
+    std::atomic<UInt64> available_space_bytes = 0;
 
     static std::mutex reservation_mutex;
 

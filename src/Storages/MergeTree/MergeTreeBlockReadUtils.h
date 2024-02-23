@@ -77,6 +77,8 @@ struct MergeTreeReadTask
 
     bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
 
+    void finish();
+
     MergeTreeReadTask(
         const DataPartPtr & data_part_,
         const AlterConversionsPtr & alter_conversions_,
