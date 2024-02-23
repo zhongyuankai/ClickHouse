@@ -2404,7 +2404,7 @@ void MergeTreeData::clearPartsFromFilesystem(const DataPartsVector & parts, bool
 
         LOG_DEBUG(log, "Failed to remove all parts, all count {}, removed {}", parts.size(), part_names_succeed.size());
 
-        if (throw_on_error)
+        if (throw_on_error && !getSettings()->skip_broken_part)
             throw;
     }
 }
@@ -5847,6 +5847,9 @@ DetachedPartsInfo MergeTreeData::getDetachedParts() const
 
     for (const auto & disk : getDisks())
     {
+        if (disk->isBroken())
+            continue;
+
         String detached_path = fs::path(relative_data_path) / MergeTreeData::DETACHED_DIR_NAME;
 
         /// Note: we don't care about TOCTOU issue here.

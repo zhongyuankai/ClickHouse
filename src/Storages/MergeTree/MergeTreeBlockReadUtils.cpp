@@ -173,6 +173,12 @@ MergeTreeReadTask::~MergeTreeReadTask()
     }
 }
 
+void MergeTreeReadTask::finish()
+{
+    mark_ranges.clear();
+    range_reader.finish();
+}
+
 MergeTreeBlockSizePredictor::MergeTreeBlockSizePredictor(
     const DataPartPtr & data_part_, const Names & columns, const Block & sample_block)
     : data_part(data_part_)

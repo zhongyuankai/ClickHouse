@@ -7,7 +7,7 @@
 namespace DB
 {
 static const auto DISK_CHECK_ERROR_SLEEP_MS = 1000;
-static const auto DISK_CHECK_ERROR_RETRY_TIME = 3;
+static const auto DISK_CHECK_ERROR_RETRY_TIME = 10;
 
 DiskLocalCheckThread::DiskLocalCheckThread(DiskLocal * disk_, ContextPtr context_, UInt64 local_disk_check_period_ms)
     : WithContext(context_)
@@ -22,6 +22,7 @@ void DiskLocalCheckThread::startup()
 {
     need_stop = false;
     retry = 0;
+    disk->updateAvailableSpace();
     task->activateAndSchedule();
 }
 
@@ -29,6 +30,10 @@ void DiskLocalCheckThread::run()
 {
     if (need_stop)
         return;
+
+    /// Update available disk space when disk is checked periodically
+    if (!disk->broken)
+        disk->updateAvailableSpace();
 
     bool can_read = disk->canRead();
     bool can_write = disk->canWrite();

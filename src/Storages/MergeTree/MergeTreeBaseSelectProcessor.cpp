@@ -392,44 +392,57 @@ IMergeTreeSelectAlgorithm::BlockAndProgress IMergeTreeSelectAlgorithm::readFromP
         current_max_block_size_rows, current_preferred_max_column_in_block_size_bytes, min_filtration_ratio, min_marks_to_read);
     UInt64 rows_to_read = std::max(static_cast<UInt64>(1), std::min(current_max_block_size_rows, recommended_rows));
 
-    auto read_result = task->range_reader.read(rows_to_read, task->mark_ranges);
-
-    /// All rows were filtered. Repeat.
-    if (read_result.num_rows == 0)
-        read_result.columns.clear();
-
-    const auto & sample_block = task->range_reader.getSampleBlock();
-    if (read_result.num_rows != 0 && sample_block.columns() != read_result.columns.size())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Inconsistent number of columns got from MergeTreeRangeReader. "
-                        "Have {} in sample block and {} columns in list",
-                        toString(sample_block.columns()), toString(read_result.columns.size()));
-
-    /// TODO: check columns have the same types as in header.
-
-    UInt64 num_filtered_rows = read_result.numReadRows() - read_result.num_rows;
-
-    size_t num_read_rows = read_result.numReadRows();
-    size_t num_read_bytes = read_result.numBytesRead();
-
-    if (task->size_predictor)
+    try
     {
-        task->size_predictor->updateFilteredRowsRation(read_result.numReadRows(), num_filtered_rows);
+        auto read_result = task->range_reader.read(rows_to_read, task->mark_ranges);
 
-        if (!read_result.columns.empty())
-            task->size_predictor->update(sample_block, read_result.columns, read_result.num_rows);
+        /// All rows were filtered. Repeat.
+        if (read_result.num_rows == 0)
+            read_result.columns.clear();
+
+        const auto & sample_block = task->range_reader.getSampleBlock();
+        if (read_result.num_rows != 0 && sample_block.columns() != read_result.columns.size())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Inconsistent number of columns got from MergeTreeRangeReader. "
+                            "Have {} in sample block and {} columns in list",
+                            toString(sample_block.columns()), toString(read_result.columns.size()));
+
+        /// TODO: check columns have the same types as in header.
+
+        UInt64 num_filtered_rows = read_result.numReadRows() - read_result.num_rows;
+
+        size_t num_read_rows = read_result.numReadRows();
+        size_t num_read_bytes = read_result.numBytesRead();
+
+        if (task->size_predictor)
+        {
+            task->size_predictor->updateFilteredRowsRation(read_result.numReadRows(), num_filtered_rows);
+
+            if (!read_result.columns.empty())
+                task->size_predictor->update(sample_block, read_result.columns, read_result.num_rows);
+        }
+
+        Block block;
+        if (read_result.num_rows != 0)
+            block = sample_block.cloneWithColumns(read_result.columns);
+
+        BlockAndProgress res = {
+            .block = std::move(block),
+            .row_count = read_result.num_rows,
+            .num_read_rows = num_read_rows,
+            .num_read_bytes = num_read_bytes };
+
+        return res;
     }
-
-    Block block;
-    if (read_result.num_rows != 0)
-        block = sample_block.cloneWithColumns(read_result.columns);
-
-    BlockAndProgress res = {
-        .block = std::move(block),
-        .row_count = read_result.num_rows,
-        .num_read_rows = num_read_rows,
-        .num_read_bytes = num_read_bytes };
-
-    return res;
+    catch (...)
+    {
+        if (storage.getSettings()->skip_broken_part)
+        {
+            LOG_TRACE(log, "Skip read broken part {}, error: {}", task->data_part->name, getCurrentExceptionMessage(false));
+            task->finish();
+            return {{}, 0, 0, 0};
+        }
+        throw;
+    }
 }
 
 
