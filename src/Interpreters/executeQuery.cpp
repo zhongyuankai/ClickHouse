@@ -4,6 +4,7 @@
 #include <Common/ThreadProfileEvents.h>
 #include <Common/MemoryTrackerBlockerInThread.h>
 #include <Common/SensitiveDataMasker.h>
+#include <DataTypes/DataTypeDateTime.h>
 
 #include <Interpreters/AsynchronousInsertQueue.h>
 #include <Interpreters/Cache/QueryCache.h>
@@ -39,6 +40,7 @@
 
 #include <Formats/FormatFactory.h>
 #include <Storages/StorageInput.h>
+#include <Storages/VirtualColumnUtils.h>
 
 #include <Access/EnabledQuota.h>
 #include <Interpreters/ApplyWithGlobalVisitor.h>
@@ -985,7 +987,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         QueryCachePtr query_cache = context->getQueryCache();
-        const bool can_use_query_cache = query_cache != nullptr && settings.use_query_cache && !internal && (ast->as<ASTSelectQuery>() || ast->as<ASTSelectWithUnionQuery>());
+        const bool can_use_query_cache = query_cache != nullptr
+            && settings.use_query_cache
+            && !internal
+            && client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY
+            && (ast->as<ASTSelectQuery>() || ast->as<ASTSelectWithUnionQuery>());
         QueryCache::Usage query_cache_usage = QueryCache::Usage::None;
 
         if (!async_insert)
@@ -1095,10 +1101,51 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     if (can_use_query_cache && settings.enable_writes_to_query_cache
                         && (!astContainsNonDeterministicFunctions(ast, context) || settings.query_cache_store_results_of_queries_with_nondeterministic_functions))
                     {
+                        /// If you query expired data, you can set a longer ttl.
+                        /// Currently only supports simple queries for judgment.
+                        ///  The corresponding column of `settings.query_cache_expired_column` needs to be rounded to the hour.
+                        auto query_expired_data = [&]()
+                        {
+                            try
+                            {
+                                if (settings.query_cache_expired_column.value.empty())
+                                    return false;
+
+                                MutableColumnPtr column = ColumnUInt32::create();
+                                size_t expired_hour = settings.query_cache_expired_data_in_hour;
+                                for (size_t i = 0; i <= expired_hour; i++)
+                                {
+                                    auto hour = DateLUT::instance().toStartOfHour(time(nullptr) - i * 60 * 60);
+                                    column->insert(hour);
+                                }
+
+                                Block block{ColumnWithTypeAndName(
+                                    std::move(column), std::make_shared<DataTypeDateTime>(), settings.query_cache_expired_column)};
+                                if (ASTSelectWithUnionQuery * union_ast = ast->as<ASTSelectWithUnionQuery>())
+                                    VirtualColumnUtils::filterBlockWithQuery(union_ast->list_of_selects->children[0], block, context);
+                                else
+                                    VirtualColumnUtils::filterBlockWithQuery(ast, block, context);
+
+                                return block.rows() == 0;
+                            }
+                            catch (...)
+                            {
+                                LOG_ERROR(&Poco::Logger::get("executeQuery"), "Query cache to check whether querying expired data failed, {}",
+                                          getCurrentExceptionMessage(true));
+                                return false;
+                            }
+                        };
+
+                        std::chrono::seconds query_cache_ttl;
+                        if (!query_expired_data())
+                            query_cache_ttl = settings.query_cache_ttl;
+                        else
+                            query_cache_ttl = settings.query_cache_ttl_for_expired_data;
+
                         QueryCache::Key key(
                             ast, res.pipeline.getHeader(),
                             context->getUserName(), settings.query_cache_share_between_users,
-                            std::chrono::system_clock::now() + std::chrono::seconds(settings.query_cache_ttl),
+                            std::chrono::system_clock::now() + query_cache_ttl,
                             settings.query_cache_compress_entries);
 
                         const size_t num_query_runs = query_cache->recordQueryRun(key);
