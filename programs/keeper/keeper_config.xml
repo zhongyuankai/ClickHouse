@@ -27,6 +27,8 @@
 
     <max_connections>4096</max_connections>
 
+    <listen_host>0.0.0.0</listen_host>
+
     <keeper_server>
             <tcp_port>9181</tcp_port>
 
