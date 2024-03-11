@@ -94,14 +94,18 @@ ProcessList::insert(const String & query_, const IAST * ast, ContextMutablePtr q
         if (!is_unlimited_query)
         {
             QueryAmount amount = getQueryKindAmount(query_kind);
-            if (max_insert_queries_amount && query_kind == IAST::QueryKind::Insert && amount >= max_insert_queries_amount)
+            /// The purpose is to be compatible with old configurations, max_insert_queries、max_select_queries
+            size_t max_insert_queries = std::max(max_insert_queries_amount, static_cast<size_t>(settings.max_insert_queries));
+            if (max_insert_queries && query_kind == IAST::QueryKind::Insert && amount >= max_insert_queries)
                 throw Exception(ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES,
                                 "Too many simultaneous insert queries. Maximum: {}, current: {}",
-                                max_insert_queries_amount, amount);
-            if (max_select_queries_amount && query_kind == IAST::QueryKind::Select && amount >= max_select_queries_amount)
+                                max_insert_queries, amount);
+
+            size_t max_select_queries = std::max(max_select_queries_amount, static_cast<size_t>(settings.max_select_queries));
+            if (max_select_queries && query_kind == IAST::QueryKind::Select && amount >= max_select_queries)
                 throw Exception(ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES,
                                 "Too many simultaneous select queries. Maximum: {}, current: {}",
-                                max_select_queries_amount, amount);
+                                max_select_queries, amount);
         }
 
         {

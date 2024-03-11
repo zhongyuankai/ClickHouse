@@ -21,6 +21,21 @@ node_select3 = cluster.add_instance(
     "node_select3", main_configs=["configs/concurrent_select_restriction.xml"]
 )
 
+node_insert4 = cluster.add_instance(
+    "node_insert4", user_configs=["configs/concurrent_insert_user_restriction.xml"]
+)
+node_select5 = cluster.add_instance(
+    "node_select5", user_configs=["configs/concurrent_select_user_restriction.xml"]
+)
+
+node_select6 = cluster.add_instance(
+    "node_select6", user_configs=["configs/concurrent_select_user_restriction.xml"]
+)
+
+node_select7 = cluster.add_instance(
+    "node_select7", user_configs=["configs/concurrent_select_user_restriction.xml"]
+)
+
 
 @pytest.fixture(scope="module")
 def started_cluster():
@@ -36,6 +51,18 @@ def started_cluster():
             "create table test_concurrent_insert (x UInt64) ENGINE = MergeTree() order by tuple()"
         )
         node_insert.query(
+            "create table test_concurrent_insert (x UInt64) ENGINE = MergeTree() order by tuple()"
+        )
+        node_select5.query(
+            "create table test_concurrent_insert (x UInt64) ENGINE = MergeTree() order by tuple()"
+        )
+        node_select6.query(
+            "create table test_concurrent_insert (x UInt64) ENGINE = MergeTree() order by tuple()"
+        )
+        node_select7.query(
+            "create table test_concurrent_insert (x UInt64) ENGINE = MergeTree() order by tuple()"
+        )
+        node_insert4.query(
             "create table test_concurrent_insert (x UInt64) ENGINE = MergeTree() order by tuple()"
         )
         yield cluster
@@ -124,6 +151,47 @@ def test_select(started_cluster):
 def test_insert(started_cluster):
     common_pattern(
         node_insert,
+        "insert",
+        "insert into test_concurrent_insert select sleep(3)",
+        "select 1",
+        2,
+        10,
+    )
+
+
+def test_select_user_settings(started_cluster):
+    common_pattern(
+        node_select5,
+        "select",
+        "select sleep(3)",
+        "insert into test_concurrent_insert values (0)",
+        2,
+        10,
+    )
+
+    # subquery is not counted
+    execute_with_background(
+        node_select6,
+        "select sleep(3)",
+        "insert into test_concurrent_insert select sleep(3)",
+        2,
+        10,
+    )
+
+    # intersect and except are counted
+    common_pattern(
+        node_select7,
+        "select",
+        "select sleep(1) INTERSECT select sleep(1) EXCEPT select sleep(1)",
+        "insert into test_concurrent_insert values (0)",
+        2,
+        10,
+    )
+
+
+def test_insert_user_settings(started_cluster):
+    common_pattern(
+        node_insert4,
         "insert",
         "insert into test_concurrent_insert select sleep(3)",
         "select 1",
