@@ -1,0 +1,7 @@
+<clickhouse>
+    <profiles>
+        <default>
+            <max_select_queries>2</max_select_queries>
+        </default>
+    </profiles>
+</clickhouse>
