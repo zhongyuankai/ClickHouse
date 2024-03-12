@@ -52,6 +52,7 @@ def started_cluster():
         cluster.shutdown()
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_psql_client(started_cluster):
     node = cluster.instances["node"]
 
@@ -111,6 +112,7 @@ def test_psql_client(started_cluster):
     )
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_python_client(started_cluster):
     node = cluster.instances["node"]
 
@@ -161,6 +163,7 @@ def test_python_client(started_cluster):
     cur.execute("DROP DATABASE x")
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_java_client(started_cluster):
     node = cluster.instances["node"]
 

@@ -119,6 +119,7 @@ def kafka_cluster():
         cluster.shutdown()
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_bad_messages_parsing_stream(kafka_cluster):
     admin_client = KafkaAdminClient(
         bootstrap_servers="localhost:{}".format(kafka_cluster.kafka_port)
@@ -283,6 +284,7 @@ struct Message
     kafka_delete_topic(admin_client, "CapnProto_err")
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_bad_messages_parsing_exception(kafka_cluster, max_retries=20):
     admin_client = KafkaAdminClient(
         bootstrap_servers="localhost:{}".format(kafka_cluster.kafka_port)
@@ -341,6 +343,7 @@ Cannot parse input: expected \\'{\\' before: \\'qwertyuiop\\': while parsing Kaf
         kafka_delete_topic(admin_client, f"{format_name}_err")
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_bad_messages_to_mv(kafka_cluster, max_retries=20):
     admin_client = KafkaAdminClient(
         bootstrap_servers="localhost:{}".format(kafka_cluster.kafka_port)

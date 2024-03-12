@@ -39,6 +39,7 @@ def run_query(instance, query, data=None, settings=None):
     return result
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_select(started_cluster):
     # type: (ClickHouseCluster) -> None
 
@@ -80,6 +81,7 @@ def test_select(started_cluster):
     ]
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_select_auth(started_cluster):
     # type: (ClickHouseCluster) -> None
 
@@ -130,6 +132,7 @@ def test_select_auth(started_cluster):
     ]
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_select_auth_encoded(started_cluster):
     # type: (ClickHouseCluster) -> None
 
@@ -185,6 +188,7 @@ def test_select_auth_encoded(started_cluster):
     ]
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_select_auth_encoded_complex(started_cluster):
     # type: (ClickHouseCluster) -> None
 

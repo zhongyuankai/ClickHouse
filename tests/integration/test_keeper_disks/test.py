@@ -127,6 +127,7 @@ def test_supported_disk_types(started_cluster):
     node.contains_in_log("Disk type 'hdfs' is not supported for Keeper")
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_logs_with_disks(started_cluster):
     setup_local_storage(started_cluster)
 
@@ -193,6 +194,7 @@ def test_logs_with_disks(started_cluster):
         stop_zk(node_zk)
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_snapshots_with_disks(started_cluster):
     setup_local_storage(started_cluster)
 

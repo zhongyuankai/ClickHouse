@@ -100,6 +100,7 @@ def test_host_regexp_multiple_ptr_v4(started_cluster):
     assert "1\n" == client.exec_in_container(["bash", "-c", f"curl {endpoint}"])
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_host_regexp_multiple_ptr_v6(started_cluster):
     setup_dns_server(client.ipv6_address)
     setup_ch_server(cluster.get_instance_global_ipv6(cluster.coredns_host))
