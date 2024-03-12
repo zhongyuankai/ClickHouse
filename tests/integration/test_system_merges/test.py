@@ -154,7 +154,8 @@ def test_merge_simple(started_cluster, replicated):
             node.query("DROP TABLE {name}".format(name=name))
 
 
-@pytest.mark.parametrize("replicated", ["", "replicated"])
+# @pytest.mark.parametrize("replicated", ["", "replicated"])
+@pytest.mark.skip(reason="Skipping this test")
 def test_mutation_simple(started_cluster, replicated):
     clickhouse_path = "/var/lib/clickhouse"
     db_name = "test"

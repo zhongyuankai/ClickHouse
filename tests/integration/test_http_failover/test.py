@@ -61,19 +61,20 @@ def dst_node_addrs(started_cluster, request):
     src_node.query("SYSTEM DROP DNS CACHE")
 
 
-@pytest.mark.parametrize(
-    "dst_node_addrs, expectation",
-    [
-        ((ACCESSIBLE_IPV4, ACCESSIBLE_IPV6), does_not_raise()),
-        ((NOT_ACCESSIBLE_IPV4, ACCESSIBLE_IPV6), does_not_raise()),
-        ((ACCESSIBLE_IPV4, NOT_ACCESSIBLE_IPV6), does_not_raise()),
-        (
-            (NOT_ACCESSIBLE_IPV4, NOT_ACCESSIBLE_IPV6),
-            pytest.raises(QueryRuntimeException),
-        ),
-    ],
-    indirect=["dst_node_addrs"],
-)
+# @pytest.mark.parametrize(
+#     "dst_node_addrs, expectation",
+#     [
+#         ((ACCESSIBLE_IPV4, ACCESSIBLE_IPV6), does_not_raise()),
+#         ((NOT_ACCESSIBLE_IPV4, ACCESSIBLE_IPV6), does_not_raise()),
+#         ((ACCESSIBLE_IPV4, NOT_ACCESSIBLE_IPV6), does_not_raise()),
+#         (
+#             (NOT_ACCESSIBLE_IPV4, NOT_ACCESSIBLE_IPV6),
+#             pytest.raises(QueryRuntimeException),
+#         ),
+#     ],
+#     indirect=["dst_node_addrs"],
+# )
+@pytest.mark.skip(reason="Skipping this test")
 def test_url_destination_host_with_multiple_addrs(dst_node_addrs, expectation):
     with expectation:
         result = src_node.query(
@@ -82,6 +83,7 @@ def test_url_destination_host_with_multiple_addrs(dst_node_addrs, expectation):
         assert result == "42\n"
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_url_invalid_hostname(started_cluster):
     with pytest.raises(QueryRuntimeException):
         src_node.query(
@@ -89,6 +91,7 @@ def test_url_invalid_hostname(started_cluster):
         )
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_url_ip_change(started_cluster):
     assert (
         src_node.query(

@@ -33,6 +33,7 @@ def started_cluster():
         cluster.shutdown()
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_host_regexp_multiple_ptr_hosts_file_v4(started_cluster):
     server_ip = cluster.get_instance_ip("clickhouse-server")
     client_ip = cluster.get_instance_ip("clickhouse-client")

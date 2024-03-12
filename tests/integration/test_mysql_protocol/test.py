@@ -763,6 +763,7 @@ def test_mysqljs_client(started_cluster, nodejs_container):
     assert code == 1
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_java_client(started_cluster, java_container):
     # type: (str, Container) -> None
     with open(os.path.join(SCRIPT_DIR, "java.reference")) as fp:

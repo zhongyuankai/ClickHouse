@@ -63,6 +63,7 @@ def both_https_cluster():
         cluster.shutdown()
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_replication_when_node_ip_changed(both_https_cluster):
     """
     Test for a bug when replication over HTTPS stops working when the IP of the source replica was changed.

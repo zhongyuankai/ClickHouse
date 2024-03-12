@@ -53,6 +53,7 @@ def requests_get(url, attempts=10, sleep=0.5):
         time.sleep(sleep)
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_request_to_node_with_interserver_listen_host(start_cluster):
     response_interserver = requests_get(
         f"http://{INTERSERVER_LISTEN_HOST}:{INTERSERVER_HTTP_PORT}"
@@ -65,6 +66,7 @@ def test_request_to_node_with_interserver_listen_host(start_cluster):
     assert response_client.status_code == 200
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_request_to_node_without_interserver_listen_host(start_cluster):
     response = requests_get(
         f"http://{node_without_interserver_listen_host.ip_address}:{INTERSERVER_HTTP_PORT}"

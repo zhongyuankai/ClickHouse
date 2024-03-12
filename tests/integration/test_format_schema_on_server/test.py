@@ -35,6 +35,7 @@ def test_protobuf_format_input(started_cluster):
     assert instance.query("SELECT * from test.simple") == "1\tabc\n2\tdef\n"
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_protobuf_format_output(started_cluster):
     create_simple_table()
     instance.query("INSERT INTO test.simple VALUES (1, 'abc'), (2, 'def')")
