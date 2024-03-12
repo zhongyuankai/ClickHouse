@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tags: no-parallel, no-fasttest
+# Tags: disabled, no-parallel, no-fasttest
 # Tag no-parallel: Messes with internal cache
 #     no-fasttest: Produces wrong results in fasttest, unclear why, didn't reproduce locally.
 

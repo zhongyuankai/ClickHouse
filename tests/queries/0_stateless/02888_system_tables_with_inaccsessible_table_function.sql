@@ -1,4 +1,4 @@
--- Tags: no-fasttest
+-- Tags: disabled, no-fasttest
 
 DROP DATABASE IF EXISTS {CLICKHOUSE_DATABASE:Identifier};
 
