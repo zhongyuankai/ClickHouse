@@ -1,3 +1,5 @@
+-- Tags: disabled
+
 -- { echoOn }
 -- Expect dns.google on both queries
 select reverseDNSQuery('8.8.8.8');

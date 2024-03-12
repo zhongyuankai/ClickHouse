@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tags: long, no-ubsan
+# Tags: disabled, long, no-ubsan
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh

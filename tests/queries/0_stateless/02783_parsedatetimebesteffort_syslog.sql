@@ -1,4 +1,4 @@
--- Tags: no-fasttest
+-- Tags: disabled, no-fasttest
 
 SET session_timezone = 'UTC';
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tags: no-fasttest
+# Tags: disabled
 # Tag no-fasttest: Require python libraries like scipy, pandas and numpy
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

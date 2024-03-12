@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tags: no-parallel, no-fasttest
+# Tags: disabled, no-parallel, no-fasttest
 # Tag no-fasttest: this test mistakenly requires acces to /var/lib/clickhouse -- can't run this locally, disabled
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
