@@ -103,6 +103,8 @@ public:
     std::optional<UInt64> totalRows(const Settings & settings) const override;
     std::optional<UInt64> totalBytes(const Settings & settings) const override;
 
+    StorageID getTargetTableId() const { return target_table_id; }
+
 private:
     /// Will be initialized in constructor
     StorageID target_table_id = StorageID::createEmpty();
