@@ -7,6 +7,8 @@
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/FunctionNameNormalizer.h>
+#include <Interpreters/InterpreterInsertQuery.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/MutationsInterpreter.h>
 #include <Interpreters/MutationsNonDeterministicHelpers.h>
 #include <Interpreters/QueryLog.h>
@@ -15,13 +17,18 @@
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTIdentifier_fwd.h>
 #include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/formatAST.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
-#include <Storages/IStorage.h>
 #include <Storages/MutationCommands.h>
 #include <Storages/PartitionCommands.h>
+#include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageKeeperMap.h>
 #include <Common/typeid_cast.h>
+
+#include <Processors/Executors/CompletedPipelineExecutor.h>
+#include <Processors/Executors/PushingAsyncPipelineExecutor.h>
+#include <Processors/Executors/PushingPipelineExecutor.h>
 
 #include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
 #include <Functions/UserDefined/UserDefinedSQLFunctionVisitor.h>
@@ -133,6 +140,8 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         }
         else if (auto partition_command = PartitionCommand::parse(command_ast))
         {
+            if (partition_command->type == PartitionCommand::REPLACE_PARTITION)
+                partition_command->trigger_view = alter.need_trigger_view;
             partition_commands.emplace_back(std::move(*partition_command));
         }
         else if (auto mut_command = MutationCommand::parse(command_ast))
@@ -185,6 +194,22 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
         if (!partition_commands_pipe.empty())
             res.pipeline = QueryPipeline(std::move(partition_commands_pipe));
+
+        // trigger view if needed
+        if (alter.need_trigger_view)
+        {
+            PartitionCommands replace_partition_commands;
+            for (const PartitionCommand & command : partition_commands)
+            {
+                if (command.type== PartitionCommand::Type::REPLACE_PARTITION)
+                {
+                    replace_partition_commands.push_back(command);
+                }
+            }
+            if (!replace_partition_commands.empty())
+                triggerViewInsert(replace_partition_commands, table);
+        }
+
     }
 
     if (!alter_commands.empty())
@@ -200,6 +225,123 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     return res;
 }
 
+void InterpreterAlterQuery::triggerViewInsert(const PartitionCommands & commands, StoragePtr table)
+{
+    /// get partition_ids
+    MergeTreeData * merge_tree_data = dynamic_cast<MergeTreeData *>(table.get());
+    if (!merge_tree_data)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "Cannot replace partition trigger view from table {} with storage {}",
+                        table->getStorageID().getNameForLogs(), table->getName());
+
+    Strings partition_ids;
+    for (auto & command : commands)
+    {
+        String partition_id = merge_tree_data->getPartitionIDFromQuery(command.partition, getContext());
+        partition_ids.emplace_back(partition_id);
+    }
+
+    /// get materialize view by table
+    auto views = DatabaseCatalog::instance().getDependentViews(table->getStorageID());
+    if (views.empty())
+        return;
+
+    /// insert into select => InterpreterInsertQuery
+    for (const auto & view_id: views)
+    {
+        auto view = DatabaseCatalog::instance().tryGetTable(view_id, getContext());
+        if (view == nullptr)
+        {
+            LOG_WARNING(
+                &Poco::Logger::get("InterpreterAlterQuery"), "Replace partition trigger view, trying to access table {} but it doesn't exist",
+                view_id.getFullTableName());
+            continue;
+        }
+
+        /// get materialized view
+        if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(view.get()))
+        {
+            auto lock = materialized_view->tryLockForShare(getContext()->getInitialQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
+            if (lock == nullptr)
+            {
+                // In case the materialized view is dropped/detached at this point, we register a warning and ignore it
+                assert(materialized_view->is_dropped || materialized_view->is_detached);
+                LOG_WARNING(
+                    &Poco::Logger::get("InterpreterAlterQuery"), "Replace partition trigger view, trying to access table {} but it doesn't exist",
+                    view_id.getFullTableName());
+                continue;
+            }
+
+            std::shared_ptr<ASTInsertQuery> insert = std::make_shared<ASTInsertQuery>();
+            auto target_table_id = materialized_view->getTargetTableId();
+            insert->table_id = target_table_id;
+
+            /// Specify the corresponding column in the Insert statement
+            insert->columns = std::make_shared<ASTExpressionList>();
+            StorageMetadataPtr storage_metadata = materialized_view->getInMemoryMetadataPtr();
+            auto & all_columns = storage_metadata->getColumns();
+            for (const auto & column : all_columns)
+            {
+                insert->columns->children.push_back(std::make_shared<ASTIdentifier>(column.name));
+            }
+
+            /// get select query from materialized view
+            ASTPtr query = storage_metadata->getSelectQuery().inner_query->clone();
+            auto select_query = query->as<ASTSelectQuery>();
+
+            /// make where condition
+            std::shared_ptr<ASTFunction> where_func;
+            for (auto it = partition_ids.begin(); it != partition_ids.end(); ++it)
+            {
+                auto func = std::make_shared<ASTFunction>();
+                auto p1 = std::make_shared<ASTIdentifier>("_partition_id");
+                auto p2 = std::make_shared<ASTLiteral>(*it);
+                func = makeASTFunction("equals", p1, p2);
+                if (it == partition_ids.begin())
+                {
+                    where_func = func;
+                }
+                else
+                {
+                    where_func = makeASTFunction("or", where_func, func);
+                }
+            }
+
+            /// if have where xxx
+            if (select_query->where())
+            {
+                // and _partition_id = xxx
+                select_query->setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", select_query->where(), where_func));
+            }
+            else
+            {
+                // where _partition_id = xxx
+                select_query->setExpression(ASTSelectQuery::Expression::WHERE, where_func);
+            }
+
+            /// convert type of ASTSelectQuery to type of ASTSelectWithUnionQuery
+            const auto select_with_union_query = std::make_shared<ASTSelectWithUnionQuery>();
+            select_with_union_query->list_of_selects = std::make_shared<ASTExpressionList>();
+            select_with_union_query->list_of_selects->children.push_back(query);
+
+            /// set insert of select
+            insert->select = select_with_union_query;
+            LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Initial trigger insert into select sql: {}", DB::serializeAST(*insert));
+
+            /// InterpreterInsertQuery::execute();
+            std::shared_ptr<Context> insert_context =  Context::createCopy(getContext());
+            Settings new_settings = insert_context->getSettings();
+            new_settings.max_insert_threads = std::max<UInt64>(1, new_settings.max_insert_threads);
+            insert_context->setSettings(new_settings);
+
+            InterpreterInsertQuery interpreter(insert, insert_context);
+            BlockIO io = interpreter.execute();
+
+            CompletedPipelineExecutor executor(io.pipeline);
+            executor.execute();
+        }
+    }
+}
 
 BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
 {

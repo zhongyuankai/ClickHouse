@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Interpreters/IInterpreter.h>
+#include <Interpreters/StorageID.h>
 #include <Parsers/IAST_fwd.h>
+#include <Storages/IStorage.h>
 
 
 namespace DB
@@ -10,6 +12,7 @@ namespace DB
 class AccessRightsElements;
 class ASTAlterCommand;
 class ASTAlterQuery;
+struct PartitionCommand;
 
 
 /** Allows you add or remove a column in the table.
@@ -34,6 +37,8 @@ private:
     BlockIO executeToTable(const ASTAlterQuery & alter);
 
     BlockIO executeToDatabase(const ASTAlterQuery & alter);
+
+    void triggerViewInsert(const PartitionCommands & commands, StoragePtr table);
 
     ASTPtr query_ptr;
 };
