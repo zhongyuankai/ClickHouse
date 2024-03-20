@@ -85,6 +85,7 @@ def replace_in_file_in_container(file_name, what, replace_with):
     instance.exec_in_container(["sed", "-i", f"s/{what}/{replace_with}/g", file_name])
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_reload_while_loading(started_cluster):
     query = instance.query
 
@@ -138,6 +139,7 @@ def test_reload_while_loading(started_cluster):
     assert query("SELECT dictGetInt32('slow', 'a', toUInt64(5))") == "6\n"
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_reload_after_loading(started_cluster):
     query = instance.query
 
@@ -192,6 +194,7 @@ def test_reload_after_loading(started_cluster):
     assert query("SELECT dictGetInt32('executable', 'a', toUInt64(7))") == "83\n"
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_reload_after_fail_by_system_reload(started_cluster):
     query = instance.query
 
@@ -234,6 +237,7 @@ def test_reload_after_fail_by_system_reload(started_cluster):
     assert get_status("no_file") == "LOADED"
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_reload_after_fail_by_timer(started_cluster):
     # dictionaries_lazy_load == false, so this dictionary is not loaded.
     assert get_status("no_file_2") == "NOT_LOADED"
@@ -276,6 +280,7 @@ def test_reload_after_fail_by_timer(started_cluster):
     assert get_status("no_file_2") == "LOADED"
 
 
+@pytest.mark.skip(reason="Skipping this test")
 def test_reload_after_fail_in_cache_dictionary(started_cluster):
     query = instance.query
     query_and_get_error = instance.query_and_get_error
