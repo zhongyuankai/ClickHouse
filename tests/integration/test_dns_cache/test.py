@@ -217,7 +217,7 @@ node6 = cluster.add_instance(
 )
 
 
-#@pytest.mark.parametrize("node", [node5, node6])
+# @pytest.mark.parametrize("node", [node5, node6])
 @pytest.mark.skip(reason="Skipping this test")
 def test_user_access_ip_change(cluster_with_dns_cache_update, node):
     node_name = node.name
