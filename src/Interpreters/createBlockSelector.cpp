@@ -70,4 +70,57 @@ template IColumn::Selector createBlockSelector<Int16>(const IColumn & column, co
 template IColumn::Selector createBlockSelector<Int32>(const IColumn & column, const std::vector<UInt64> & slots);
 template IColumn::Selector createBlockSelector<Int64>(const IColumn & column, const std::vector<UInt64> & slots);
 
+
+template <typename T>
+IColumn::Selector createBlockSelector(
+    const IColumn & column,
+    const size_t num_shards)
+{
+    assert(num_shards != 0);
+
+    size_t num_rows = column.size();
+    IColumn::Selector  selector(num_rows);
+
+    /** Modulo of division of negative numbers to positive number in C++11 is negative (so called truncated division).
+      * This is not suitable for our task. So we will process signed numbers as unsigned.
+      * It is not near like remainder of division, but is suitable for our task.
+      */
+    using UnsignedT = make_unsigned_t<T>;
+
+    /// const columns contain only one value, therefore we do not need to read it at every iteration
+    if (isColumnConst(column))
+    {
+        auto data = assert_cast<const ColumnConst &>(column).getValue<T>();
+        if (data <= 0)
+        {
+            /// Randomly select a shard.
+            data = rand() % num_shards + 1;
+        }
+
+        const auto shard_num = static_cast<UInt64>((static_cast<UnsignedT>(data) - 1) % num_shards);
+        selector.assign(num_rows, shard_num);
+    }
+    else
+    {
+        /// libdivide support only UInt32 and UInt64.
+        using TUInt32Or64 = std::conditional_t<sizeof(UnsignedT) <= 4, UInt32, UInt64>;
+
+        const auto & data = typeid_cast<const ColumnVector<T> &>(column).getData();
+
+        for (size_t i = 0; i < num_rows; ++i)
+            selector[i] = (static_cast<TUInt32Or64>(data[i]) - 1) % num_shards;
+    }
+
+    return selector;
+}
+
+template IColumn::Selector createBlockSelector<UInt8>(const IColumn & column, const size_t num_shards);
+template IColumn::Selector createBlockSelector<UInt16>(const IColumn & column, const size_t num_shards);
+template IColumn::Selector createBlockSelector<UInt32>(const IColumn & column, const size_t num_shards);
+template IColumn::Selector createBlockSelector<UInt64>(const IColumn & column, const size_t num_shards);
+template IColumn::Selector createBlockSelector<Int8>(const IColumn & column, const size_t num_shards);
+template IColumn::Selector createBlockSelector<Int16>(const IColumn & column, const size_t num_shards);
+template IColumn::Selector createBlockSelector<Int32>(const IColumn & column, const size_t num_shards);
+template IColumn::Selector createBlockSelector<Int64>(const IColumn & column, const size_t num_shards);
+
 }

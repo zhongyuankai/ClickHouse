@@ -312,6 +312,7 @@ StorageDistributed::StorageDistributed(
     const String & cluster_name_,
     ContextPtr context_,
     const ASTPtr & sharding_key_,
+    bool no_weight_,
     const String & storage_policy_name_,
     const String & relative_data_path_,
     const DistributedSettings & distributed_settings_,
@@ -327,6 +328,7 @@ StorageDistributed::StorageDistributed(
     , owned_cluster(std::move(owned_cluster_))
     , cluster_name(getContext()->getMacros()->expand(cluster_name_))
     , has_sharding_key(sharding_key_)
+    , no_weight(no_weight_)
     , relative_data_path(relative_data_path_)
     , distributed_settings(distributed_settings_)
     , rng(randomSeed())
@@ -388,6 +390,7 @@ StorageDistributed::StorageDistributed(
     const String & cluster_name_,
     ContextPtr context_,
     const ASTPtr & sharding_key_,
+    bool no_weight_,
     const String & storage_policy_name_,
     const String & relative_data_path_,
     const DistributedSettings & distributed_settings_,
@@ -403,6 +406,7 @@ StorageDistributed::StorageDistributed(
         cluster_name_,
         context_,
         sharding_key_,
+        no_weight_,
         storage_policy_name_,
         relative_data_path_,
         distributed_settings_,
@@ -1383,17 +1387,27 @@ ClusterPtr StorageDistributed::getOptimizedCluster(
     return {};
 }
 
-IColumn::Selector StorageDistributed::createSelector(const ClusterPtr cluster, const ColumnWithTypeAndName & result)
+IColumn::Selector StorageDistributed::createSelector(const ClusterPtr cluster, const ColumnWithTypeAndName & result, bool no_weight)
 {
     const auto & slot_to_shard = cluster->getSlotToShard();
 
 // If result.type is DataTypeLowCardinality, do shard according to its dictionaryType
-#define CREATE_FOR_TYPE(TYPE)                                                                                       \
-    if (typeid_cast<const DataType##TYPE *>(result.type.get()))                                                     \
-        return createBlockSelector<TYPE>(*result.column, slot_to_shard);                                            \
-    else if (auto * type_low_cardinality = typeid_cast<const DataTypeLowCardinality *>(result.type.get()))          \
-        if (typeid_cast<const DataType ## TYPE *>(type_low_cardinality->getDictionaryType().get()))                 \
-            return createBlockSelector<TYPE>(*result.column->convertToFullColumnIfLowCardinality(), slot_to_shard);
+#define CREATE_FOR_TYPE(TYPE)                                                                                                             \
+    if (typeid_cast<const DataType##TYPE *>(result.type.get()))                                                                           \
+    {                                                                                                                                     \
+        if (no_weight)                                                                                                                    \
+             return createBlockSelector<TYPE>(*result.column, cluster->getShardsInfo().size());                                           \
+        else                                                                                                                              \
+             return createBlockSelector<TYPE>(*result.column, slot_to_shard);                                                             \
+    }                                                                                                                                     \
+    else if (auto * type_low_cardinality = typeid_cast<const DataTypeLowCardinality *>(result.type.get()))                                \
+        if (typeid_cast<const DataType ## TYPE *>(type_low_cardinality->getDictionaryType().get()))                                       \
+        {                                                                                                                                 \
+           if (no_weight)                                                                                                                 \
+                return createBlockSelector<TYPE>(*result.column->convertToFullColumnIfLowCardinality(), cluster->getShardsInfo().size()); \
+           else                                                                                                                           \
+                return createBlockSelector<TYPE>(*result.column->convertToFullColumnIfLowCardinality(), slot_to_shard);                   \
+        }                                                                                                                                 \
 
     CREATE_FOR_TYPE(UInt8)
     CREATE_FOR_TYPE(UInt16)
@@ -1475,7 +1489,7 @@ ClusterPtr StorageDistributed::skipUnusedShards(
             throw Exception(ErrorCodes::TOO_MANY_ROWS, "sharding_key_expr should evaluate as a single row");
 
         const ColumnWithTypeAndName & result = block.getByName(sharding_key_column_name);
-        const auto selector = createSelector(cluster, result);
+        const auto selector = createSelector(cluster, result, no_weight);
 
         shards.insert(selector.begin(), selector.end());
     }
@@ -1654,12 +1668,14 @@ void registerStorageDistributed(StorageFactory & factory)
 
         ASTs & engine_args = args.engine_args;
 
-        if (engine_args.size() < 3 || engine_args.size() > 5)
+        if (engine_args.size() < 3 || engine_args.size() > 6)
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                             "Storage Distributed requires from 3 "
                             "to 5 parameters - name of configuration section with list "
                             "of remote servers, name of remote database, name "
-                            "of remote table, sharding key expression (optional), policy to store data in (optional).");
+                            "of remote table, sharding key expression (optional), "
+                            "sharding do not use weight (optional), "
+                            "policy to store data in (optional).");
 
         String cluster_name = getClusterNameAndMakeLiteral(engine_args[0]);
 
@@ -1673,11 +1689,12 @@ void registerStorageDistributed(StorageFactory & factory)
         String remote_table = checkAndGetLiteralArgument<String>(engine_args[2], "remote_table");
 
         const auto & sharding_key = engine_args.size() >= 4 ? engine_args[3] : nullptr;
+        UInt64 no_weight = engine_args.size() >= 5 ? engine_args[4]->as<ASTLiteral &>().value.safeGet<UInt64>() : 0;
         String storage_policy = "default";
-        if (engine_args.size() >= 5)
+        if (engine_args.size() >= 6)
         {
-            engine_args[4] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[4], local_context);
-            storage_policy = checkAndGetLiteralArgument<String>(engine_args[4], "storage_policy");
+            engine_args[5] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[5], local_context);
+            storage_policy = checkAndGetLiteralArgument<String>(engine_args[5], "storage_policy");
         }
 
         /// Check that sharding_key exists in the table and has numeric type.
@@ -1734,6 +1751,7 @@ void registerStorageDistributed(StorageFactory & factory)
             cluster_name,
             context,
             sharding_key,
+            no_weight,
             storage_policy,
             args.relative_data_path,
             distributed_settings,

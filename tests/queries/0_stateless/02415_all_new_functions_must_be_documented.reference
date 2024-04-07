@@ -636,6 +636,7 @@ runningConcurrency
 runningDifference
 runningDifferenceStartingWithFirstValue
 serverUUID
+shard
 shardCount
 shardNum
 showCertificate

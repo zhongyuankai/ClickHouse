@@ -52,6 +52,7 @@ public:
         const String & cluster_name_,
         ContextPtr context_,
         const ASTPtr & sharding_key_,
+        bool no_weight,
         const String & storage_policy_name_,
         const String & relative_data_path_,
         const DistributedSettings & distributed_settings_,
@@ -67,6 +68,7 @@ public:
         const String & cluster_name_,
         ContextPtr context_,
         const ASTPtr & sharding_key_,
+        bool no_weight_,
         const String & storage_policy_name_,
         const String & relative_data_path_,
         const DistributedSettings & distributed_settings_,
@@ -180,7 +182,7 @@ private:
     /// Used by StorageSystemDistributionQueue
     std::vector<DistributedAsyncInsertDirectoryQueue::Status> getDirectoryQueueStatuses() const;
 
-    static IColumn::Selector createSelector(ClusterPtr cluster, const ColumnWithTypeAndName & result);
+    static IColumn::Selector createSelector(ClusterPtr cluster, const ColumnWithTypeAndName & result, bool no_weight = false);
     /// Apply the following settings:
     /// - optimize_skip_unused_shards
     /// - force_optimize_skip_unused_shards
@@ -233,6 +235,7 @@ private:
     bool sharding_key_is_deterministic = false;
     ExpressionActionsPtr sharding_key_expr;
     String sharding_key_column_name;
+    bool no_weight;
 
     /// Used for global monotonic ordering of files to send.
     SimpleIncrement file_names_increment;

@@ -23,4 +23,11 @@ IColumn::Selector createBlockSelector(
     const IColumn & column,
     const std::vector<UInt64> & slots);
 
+/**
+ * Implement a selector without weight
+ */
+template <typename T>
+IColumn::Selector createBlockSelector(
+    const IColumn & column,
+    const size_t num_shards);
 }
