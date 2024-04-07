@@ -637,11 +637,13 @@ void Cluster::initMisc()
 
     for (auto & shard_info : shards_info)
     {
-        if (!shard_info.isLocal())
-        {
+        if (shard_info.isLocal())
+            any_local_shard_info = &shard_info;
+        else if (!any_remote_shard_info)
             any_remote_shard_info = &shard_info;
+
+        if (any_local_shard_info && any_remote_shard_info)
             break;
-        }
     }
 }
 

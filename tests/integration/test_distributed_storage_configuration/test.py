@@ -53,6 +53,7 @@ def test_insert(start_cluster):
         test,
         foo,
         key%2,
+        0,
         'default'
     )
     """

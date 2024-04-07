@@ -242,6 +242,11 @@ public:
         return shards_info.front();
     }
 
+    const ShardInfo * getLocalShardInfo() const
+    {
+        return any_local_shard_info;
+    }
+
     /// The number of remote shards.
     size_t getRemoteShardCount() const { return remote_shard_count; }
 
@@ -302,6 +307,8 @@ private:
     ShardsInfo shards_info;
     /// Any remote shard.
     ShardInfo * any_remote_shard_info = nullptr;
+    /// Any local shard.
+    ShardInfo * any_local_shard_info = nullptr;
 
     /// Non-empty is either addresses or addresses_with_failover.
     /// The size and order of the elements in the corresponding array corresponds to shards_info.
