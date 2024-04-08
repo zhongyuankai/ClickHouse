@@ -19,6 +19,8 @@ QueryPipelineBuilderPtr ISourceStep::updatePipeline(QueryPipelineBuilders, const
     /// `QueryPipelineProcessorsCollector` to collect Processors.
     initializePipeline(*pipeline, settings);
 
+    addVirtualColumnForPipeline(*pipeline);
+
     /// But we need to set QueryPlanStep manually for the Processors, which
     /// will be used in `EXPLAIN PIPELINE`
     for (auto & processor : processors)

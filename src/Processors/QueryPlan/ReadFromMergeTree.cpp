@@ -2106,6 +2106,56 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         pipeline.setQueryIdHolder(std::move(query_id_holder));
 }
 
+void ReadFromMergeTree::addVirtualColumnForPipeline(QueryPipelineBuilder & pipeline)
+{
+    if (!pipeline.initialized())
+        return;
+
+    /// Add virtual columns if we don't already have them.
+    Block pipe_header = pipeline.getHeader();
+
+    bool has_database_virtual_column = false;
+    bool has_table_virtual_column = false;
+    for (const auto & column_name : all_column_names)
+    {
+        if ("_database" == column_name)
+            has_database_virtual_column = true;
+        else if ("_table" == column_name)
+            has_table_virtual_column = true;
+    }
+
+    auto storage_id = data.getStorageID();
+    if (has_database_virtual_column && pipe_header.has("_database"))
+    {
+        ColumnWithTypeAndName column;
+        column.name = "_database";
+        column.type = std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>());
+        column.column = column.type->createColumnConst(0, Field(storage_id.getDatabaseName()));
+
+        auto adding_column_dag = ActionsDAG::makeAddingColumnActions(std::move(column));
+        auto adding_column_actions = std::make_shared<ExpressionActions>(
+            std::move(adding_column_dag), ExpressionActionsSettings::fromContext(context, CompileExpressions::yes));
+
+        pipeline.addSimpleTransform([&](const Block & stream_header)
+                                    { return std::make_shared<ExpressionTransform>(stream_header, adding_column_actions); });
+    }
+
+    if (has_table_virtual_column && pipe_header.has("_table"))
+    {
+        ColumnWithTypeAndName column;
+        column.name = "_table";
+        column.type = std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>());
+        column.column = column.type->createColumnConst(0, Field(storage_id.getTableName()));
+
+        auto adding_column_dag = ActionsDAG::makeAddingColumnActions(std::move(column));
+        auto adding_column_actions = std::make_shared<ExpressionActions>(
+            std::move(adding_column_dag), ExpressionActionsSettings::fromContext(context, CompileExpressions::yes));
+
+        pipeline.addSimpleTransform([&](const Block & stream_header)
+                                    { return std::make_shared<ExpressionTransform>(stream_header, adding_column_actions); });
+    }
+}
+
 static const char * indexTypeToString(ReadFromMergeTree::IndexType type)
 {
     switch (type)

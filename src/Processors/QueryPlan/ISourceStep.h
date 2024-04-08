@@ -14,6 +14,8 @@ public:
 
     virtual void initializePipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) = 0;
 
+    virtual void addVirtualColumnForPipeline(QueryPipelineBuilder & pipeline) { }
+
     void describePipeline(FormatSettings & settings) const override;
 };
 
