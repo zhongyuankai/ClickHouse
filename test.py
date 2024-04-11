@@ -567,6 +567,7 @@ def main(args):
 
         CONTAINER_NAME = f"build_{random_str()}"
 
+        ccache_path_deb = None
         if ccache_path:
             ccache_path_deb = os.path.join(ccache_path, "ccache_deb")
             if not os.path.exists(ccache_path_deb):
@@ -588,6 +589,7 @@ def main(args):
 
         CONTAINER_NAME = f"build_{random_str()}"
 
+        ccache_path_bin = None
         if ccache_path:
             ccache_path_bin = os.path.join(ccache_path, "ccache_bin")
             if not os.path.exists(ccache_path_bin):
@@ -609,6 +611,7 @@ def main(args):
 
         CONTAINER_NAME = f"build_{random_str()}"
 
+        ccache_path_bin_debug = None
         if ccache_path:
             ccache_path_bin_debug = os.path.join(ccache_path, "ccache_bin_debug")
             if not os.path.exists(ccache_path_bin_debug):
