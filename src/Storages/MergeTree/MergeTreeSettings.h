@@ -202,6 +202,7 @@ struct Settings;
     M(Bool, in_memory_parts_insert_sync, false, "Obsolete setting, does nothing.", 0) \
     M(MaxThreads, max_part_loading_threads, 0, "Obsolete setting, does nothing.", 0) \
     M(MaxThreads, max_part_removal_threads, 0, "Obsolete setting, does nothing.", 0) \
+    M(Int64, max_partitions_to_reserve, 0, "Obsolete setting, does nothing", 0) \
 
     /// Settings that should not change after the creation of a table.
     /// NOLINTNEXTLINE
