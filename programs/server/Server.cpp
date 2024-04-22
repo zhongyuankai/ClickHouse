@@ -129,6 +129,10 @@
 #   include <azure/storage/common/internal/xml_wrapper.hpp>
 #endif
 
+#if USE_KMS
+#include <kms_operator.h>
+#endif
+
 #include <incbin.h>
 /// A minimal file used when the server is run without installation
 INCBIN(resource_embedded_xml, SOURCE_DIR "/programs/server/embedded.xml");
@@ -1037,6 +1041,17 @@ try
         /// Directory with metadata of tables, which was marked as dropped by Atomic database
         fs::create_directories(path / "metadata_dropped/");
     }
+
+#if USE_KMS
+    /// Initialize kms client.
+    if (config().has("kms"))
+    {
+        String kms_host = config().getString("kms.host");
+        Int32 kms_port = config().getInt("kms.port");
+        int code = init_kms_client_enable_cache(const_cast<char *>(kms_host.c_str()), kms_port, nullptr, 0, 300);
+        LOG_INFO(log, "Initializing kms client cache, host: {}, port: {}, code: {}.", kms_host, kms_port, code);
+    }
+#endif
 
 #if USE_ROCKSDB
     /// Initialize merge tree metadata cache

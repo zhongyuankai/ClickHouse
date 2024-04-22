@@ -1,0 +1,12 @@
+<clickhouse>
+    <kms>
+        <host>10.85.129.130</host>
+        <port>9018</port>
+    </kms>
+	<query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>1</flush_interval_milliseconds>
+    </query_log>
+</clickhouse>

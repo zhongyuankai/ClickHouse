@@ -37,6 +37,7 @@
 #include <Parsers/queryToString.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/toOneLineQuery.h>
+#include <Poco/RegularExpression.h>
 
 #include <Formats/FormatFactory.h>
 #include <Storages/StorageInput.h>
@@ -112,13 +113,47 @@ static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
         ast.checkSize(settings.max_ast_elements);
 }
 
+static bool hasEncryptionFunction(const String & query)
+{
+    return query.find("sm4Encrypt") != std::string::npos || query.find("sm4Decrypt") != std::string::npos;
+}
+
+static String hideEncryptionFunction(String query)
+{
+    if (query.find("sm4Encrypt") != std::string::npos)
+    {
+        static const Poco::RegularExpression reEncrypt("sm4Encrypt\\((.*?),.*?\\)");
+        Poco::RegularExpression::MatchVec matches;
+        size_t pos = 0;
+        while (reEncrypt.match(query, pos, matches) > 1)
+        {
+            reEncrypt.subst(query, fmt::format("sm4Encrypt({}, 'xxx', 'xxx', 'xxx', 'xxx')", query.substr(matches[1].offset, matches[1].length)));
+            pos = matches[1].offset + matches[1].length;
+        }
+    }
+
+    if (query.find("sm4Decrypt") != std::string::npos)
+    {
+        static const Poco::RegularExpression reDecrypt("sm4Decrypt\\((.*?),.*?\\)");
+        Poco::RegularExpression::MatchVec matches;
+        size_t pos = 0;
+        while (reDecrypt.match(query, pos, matches) > 1)
+        {
+            reDecrypt.subst(query, fmt::format("sm4Decrypt({}, 'xxx', 'xxx')", query.substr(matches[1].offset, matches[1].length)));
+            pos = matches[1].offset + matches[1].length;
+        }
+    }
+    return query;
+}
 
 /// Log query into text log (not into system table).
 static void logQuery(const String & query, ContextPtr context, bool internal, QueryProcessingStage::Enum stage)
 {
     if (internal)
     {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "(internal) {} (stage: {})", toOneLineQuery(query), QueryProcessingStage::toString(stage));
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "(internal) {} (stage: {})",
+                  toOneLineQuery(hasEncryptionFunction(query) ? hideEncryptionFunction(query) : query),
+                  QueryProcessingStage::toString(stage));
     }
     else
     {
@@ -147,7 +182,7 @@ static void logQuery(const String & query, ContextPtr context, bool internal, Qu
             (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : std::string()),
             transaction_info,
             comment,
-            toOneLineQuery(query),
+            toOneLineQuery(hasEncryptionFunction(query) ? hideEncryptionFunction(query) : query),
             QueryProcessingStage::toString(stage));
 
         if (client_info.client_trace_context.trace_id != UUID())
@@ -202,7 +237,7 @@ static void logException(ContextPtr context, QueryLogElement & elem, bool log_er
             elem.exception,
             context->getClientInfo().current_address.toString(),
             comment,
-            toOneLineQuery(elem.query),
+            toOneLineQuery(hasEncryptionFunction(elem.query) ? hideEncryptionFunction(elem.query) : elem.query),
             elem.stack_trace);
 
     if (log_error)
@@ -293,7 +328,7 @@ QueryLogElement logQueryStart(
     elem.query_start_time_microseconds = timeInMicroseconds(query_start_time);
 
     elem.current_database = context->getCurrentDatabase();
-    elem.query = query_for_logging;
+    elem.query = hasEncryptionFunction(query_for_logging) ? hideEncryptionFunction(query_for_logging) : query_for_logging;
     if (settings.log_formatted_queries)
         elem.formatted_query = queryToString(query_ast);
     elem.normalized_query_hash = normalizedQueryHash<false>(query_for_logging);
@@ -569,7 +604,7 @@ void logExceptionBeforeStart(
     elem.query_duration_ms = elapsed_millliseconds;
 
     elem.current_database = context->getCurrentDatabase();
-    elem.query = query_for_logging;
+    elem.query = hasEncryptionFunction(query_for_logging) ? hideEncryptionFunction(query_for_logging) : query_for_logging;
     elem.normalized_query_hash = normalizedQueryHash<false>(query_for_logging);
 
     // Log query_kind if ast is valid

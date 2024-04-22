@@ -150,6 +150,7 @@ function clone_submodules
             contrib/incbin
             contrib/yaml-cpp
             contrib/di-md5
+            contrib/didi-cpp-sdk-kms
         )
 
         git submodule sync

@@ -168,5 +168,8 @@ endif()
 if (TARGET ch_contrib::dimd5)
     set(USE_DIMD5 1)
 endif()
+if (TARGET ch_contrib::didi-cpp-sdk-kms)
+    set(USE_KMS 1)
+endif()
 
 set(SOURCE_DIR ${PROJECT_SOURCE_DIR})
