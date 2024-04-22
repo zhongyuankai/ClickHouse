@@ -348,3 +348,6 @@
 [submodule "contrib/robin-map"]
 	path = contrib/robin-map
 	url = https://github.com/Tessil/robin-map.git
+[submodule "contrib/didi-cpp-sdk-kms"]
+	path = contrib/didi-cpp-sdk-kms
+	url = https://git.xiaojukeji.com/sec-public/didi-cpp-sdk-kms.git

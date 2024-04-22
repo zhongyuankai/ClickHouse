@@ -101,6 +101,10 @@ if (TARGET ch_contrib::dimd5)
     list (APPEND PRIVATE_LIBS ch_contrib::dimd5)
 endif()
 
+if (TARGET ch_contrib::didi-cpp-sdk-kms)
+    list (APPEND PRIVATE_LIBS ch_contrib::didi-cpp-sdk-kms)
+endif()
+
 add_subdirectory(GatherUtils)
 list (APPEND PRIVATE_LIBS clickhouse_functions_gatherutils)
 

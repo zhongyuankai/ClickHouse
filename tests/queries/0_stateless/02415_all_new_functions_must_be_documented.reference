@@ -658,6 +658,8 @@ sipHash64
 sipHash64Keyed
 sleep
 sleepEachRow
+sm4Decrypt
+sm4Encrypt
 snowflakeToDateTime
 snowflakeToDateTime64
 space
