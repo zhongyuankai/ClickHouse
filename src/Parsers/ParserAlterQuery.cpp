@@ -35,6 +35,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_modify_sample_by("MODIFY SAMPLE BY");
     ParserKeyword s_modify_ttl("MODIFY TTL");
     ParserKeyword s_materialize_ttl("MATERIALIZE TTL");
+    /// Compatible with older versions.
+    ParserKeyword s_fast("FAST"); /// tag the FAST MATERIALIZE TTL
     ParserKeyword s_modify_setting("MODIFY SETTING");
     ParserKeyword s_reset_setting("RESET SETTING");
     ParserKeyword s_modify_query("MODIFY QUERY");
@@ -730,6 +732,17 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             else if (s_materialize_ttl.ignore(pos, expected))
             {
                 command->type = ASTAlterCommand::MATERIALIZE_TTL;
+
+                /// Parse FAST ttl_delta.
+                if (s_fast.ignore(pos, expected))
+                {
+                    ASTPtr ast;
+                    ParserNumber pn;
+                    if (pn.parse(pos, ast, expected))
+                        command->ttl_delta = ast->as<ASTLiteral &>().value.get<Int64>();
+                    else
+                        return false;
+                }
 
                 if (s_in_partition.ignore(pos, expected))
                 {

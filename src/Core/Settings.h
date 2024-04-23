@@ -636,6 +636,7 @@ class IColumn;
     M(UInt64, max_number_of_partitions_for_independent_aggregation, 128, "Maximal number of partitions in table to apply optimization", 0) \
     M(UInt64, max_insert_queries, 0, "Maximum number of concurrently INSERT queries. Zero means unlimited.", 0) \
     M(UInt64, max_select_queries, 0, "Maximum number of concurrently SELECT queries. Zero means unlimited.", 0) \
+    M(Bool, enable_fast_materialize_ttl, true, "Enable FAST_MATERIALIZE_TTL mutation command to speed up MODIFY TTL operation.", 0) \
     /** Experimental feature for moving data between shards. */ \
     \
     M(Bool, allow_experimental_query_deduplication, false, "Experimental data deduplication for SELECT queries based on part UUIDs", 0) \

@@ -399,6 +399,11 @@ void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & 
     else if (type == ASTAlterCommand::MATERIALIZE_TTL)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "MATERIALIZE TTL" << (settings.hilite ? hilite_none : "");
+
+        /// Add FAST and ttl_delta to mutation_entry for further reading and construct locally
+        if (ttl_delta != 0)
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " FAST " << ttl_delta << (settings.hilite ? hilite_none : "");
+
         if (partition)
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN PARTITION " << (settings.hilite ? hilite_none : "");

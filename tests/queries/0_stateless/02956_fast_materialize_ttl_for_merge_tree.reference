@@ -1,0 +1,48 @@
+Test MergeTree with ttl_only_drop_part set to false.
+Before modifying TTL
+6000
+After modifying TTL
+3000
+0	jan
+0	jan
+1	jan
+Test merge
+4000
+Test MergeTree with ttl_only_drop_part set to true.
+Before modifying TTL
+6000
+After modifying TTL
+4000
+0	jan
+0	jan
+1	jan
+Test merge
+4000
+Test MergeTree without ttl.
+Before modifying TTL
+6000
+Add modifying TTL
+6000
+0	Anna
+1	Anna
+2	Anna
+Shorten TTL
+3000
+0	jan
+0	jan
+1	jan
+Extend TTL
+6000
+0	Anna
+1	Anna
+2	Anna
+Shorten TTL and ttl_only_drop_part set to true
+6000
+0	Anna
+1	Anna
+2	Anna
+Test merge
+6000
+0	Anna
+0	Anna
+1	Anna

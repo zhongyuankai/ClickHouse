@@ -26,7 +26,7 @@ namespace ErrorCodes
 
 bool MutationCommand::isBarrierCommand() const
 {
-    return type == RENAME_COLUMN;
+    return type == RENAME_COLUMN || type == FAST_MATERIALIZE_TTL;
 }
 
 std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command, bool parse_alter_commands)
@@ -147,7 +147,17 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
     {
         MutationCommand res;
         res.ast = command->ptr();
-        res.type = MATERIALIZE_TTL;
+        ///judge fast_materialize_ttl condition
+        if (command->ttl_delta)
+        {
+            res.type = FAST_MATERIALIZE_TTL;
+            res.ttl_delta = command->ttl_delta;
+        }
+        else
+        {
+            res.type = MATERIALIZE_TTL;
+        }
+
         res.partition = command->partition;
         return res;
     }

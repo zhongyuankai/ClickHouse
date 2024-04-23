@@ -48,6 +48,8 @@ struct TTLDescription
 
     /// Result column of this TTL expression
     String result_column;
+    /// Source columns of this TTL expression
+    NamesAndTypesList ttl_columns;
 
     /// WHERE part in TTL expression
     /// TTL ... WHERE x % 10 == 0 and y > 5

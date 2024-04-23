@@ -35,6 +35,7 @@ struct MutationCommand
         DROP_INDEX,
         DROP_PROJECTION,
         MATERIALIZE_TTL,
+        FAST_MATERIALIZE_TTL, /// Speed up Alter ttl.
         RENAME_COLUMN,
         MATERIALIZE_COLUMN,
         ALTER_WITHOUT_MUTATION, /// pure metadata command, currently unusned
@@ -64,6 +65,9 @@ struct MutationCommand
 
     /// Column rename_to
     String rename_to = {};
+
+    /// delta between new_ttl and old_ttl
+    time_t ttl_delta = 0;
 
     /// If parse_alter_commands, than consider more Alter commands as mutation commands
     static std::optional<MutationCommand> parse(ASTAlterCommand * command, bool parse_alter_commands = false);

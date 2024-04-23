@@ -1189,6 +1189,11 @@ MergeMutateSelectedEntryPtr StorageMergeTree::selectPartsToMutate(
             MutationCommands commands_for_size_validation;
             for (const auto & command : it->second.commands)
             {
+                if (command.type == MutationCommand::Type::FAST_MATERIALIZE_TTL)
+                {
+                    break;
+                }
+
                 if (command.type != MutationCommand::Type::DROP_COLUMN
                     && command.type != MutationCommand::Type::DROP_INDEX
                     && command.type != MutationCommand::Type::DROP_PROJECTION
