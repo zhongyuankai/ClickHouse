@@ -202,6 +202,9 @@ public:
     String to_database;
     String to_table;
 
+    /// For MATERIALIZE TTL FAST ttl_delta.
+    time_t ttl_delta = 0;
+
     /// Target column name
     ASTPtr rename_to;
 

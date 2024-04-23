@@ -104,6 +104,7 @@ TTLDescription::TTLDescription(const TTLDescription & other)
     : mode(other.mode)
     , expression_ast(other.expression_ast ? other.expression_ast->clone() : nullptr)
     , result_column(other.result_column)
+    , ttl_columns(other.ttl_columns)
     , where_result_column(other.where_result_column)
     , group_by_keys(other.group_by_keys)
     , set_parts(other.set_parts)
@@ -137,6 +138,7 @@ TTLDescription & TTLDescription::operator=(const TTLDescription & other)
         expression.reset();
 
     result_column = other.result_column;
+    ttl_columns = other.ttl_columns;
     if (other.where_expression)
         where_expression = other.where_expression->clone();
     else
@@ -177,6 +179,7 @@ TTLDescription TTLDescription::getTTLFromAST(
     auto syntax_analyzer_result = TreeRewriter(context).analyze(ttl_ast, columns.getAllPhysical());
     result.expression = ExpressionAnalyzer(ttl_ast, syntax_analyzer_result, context).getActions(false);
     result.result_column = ttl_ast->getColumnName();
+    result.ttl_columns = syntax_analyzer_result->required_source_columns;
 
     if (ttl_element == nullptr) /// columns TTL
     {
