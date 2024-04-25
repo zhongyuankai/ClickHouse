@@ -149,6 +149,7 @@ function clone_submodules
             contrib/libfiu
             contrib/incbin
             contrib/yaml-cpp
+            contrib/di-md5
         )
 
         git submodule sync
