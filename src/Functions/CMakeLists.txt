@@ -97,6 +97,10 @@ if (TARGET ch_contrib::crc32-vpmsum)
     list (APPEND PUBLIC_LIBS ch_contrib::crc32-vpmsum)
 endif()
 
+if (TARGET ch_contrib::dimd5)
+    list (APPEND PRIVATE_LIBS ch_contrib::dimd5)
+endif()
+
 add_subdirectory(GatherUtils)
 list (APPEND PRIVATE_LIBS clickhouse_functions_gatherutils)
 
