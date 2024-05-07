@@ -319,6 +319,25 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::ADD_SNAPSHOT)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::ADD_SNAPSHOT;
+
+        command.if_not_exists = command_ast->if_not_exists;
+
+        return command;
+    }
+    else if (command_ast->type == ASTAlterCommand::DROP_SNAPSHOT)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.if_exists = command_ast->if_exists;
+        command.type = AlterCommand::DROP_SNAPSHOT;
+
+        return command;
+    }
     else if (command_ast->type == ASTAlterCommand::DROP_INDEX)
     {
         AlterCommand command;
@@ -723,6 +742,9 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
         for (auto & index : metadata.secondary_indices)
             rename_visitor.visit(index.definition_ast);
     }
+    else if (type == ADD_SNAPSHOT || type == DROP_SNAPSHOT)
+    {
+    }
     else
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong parameter type in ALTER query");
 }
@@ -853,6 +875,11 @@ bool AlterCommand::isCommentAlter() const
             && ttl == nullptr;
     }
     return false;
+}
+
+bool AlterCommand::isSnapshotAlter() const
+{
+    return type == ADD_SNAPSHOT || type == DROP_SNAPSHOT;
 }
 
 bool AlterCommand::isTTLAlter(const StorageInMemoryMetadata & metadata) const
@@ -1439,6 +1466,11 @@ bool AlterCommands::isSettingsAlter() const
 bool AlterCommands::isCommentAlter() const
 {
     return std::all_of(begin(), end(), [](const AlterCommand & c) { return c.isCommentAlter(); });
+}
+
+bool AlterCommands::isSnapshotAlter() const
+{
+    return std::any_of(begin(), end(), [](const AlterCommand & c) { return c.isSnapshotAlter(); });
 }
 
 static MutationCommand createMaterializeTTLCommand()

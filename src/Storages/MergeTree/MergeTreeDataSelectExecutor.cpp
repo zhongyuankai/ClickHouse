@@ -1285,6 +1285,39 @@ QueryPlanStepPtr MergeTreeDataSelectExecutor::readFromParts(
     MergeTreeDataSelectAnalysisResultPtr merge_tree_select_result_ptr,
     bool enable_parallel_reading) const
 {
+    /// Snapshot
+    const auto & select = query_info.query->as<ASTSelectQuery &>();
+    if (select.snapshot() || context->getSettingsRef().read_experimental_snapshot)
+    {
+        auto snapshot_metadata_ptr = data.getSnapshotMetadata();
+        if (snapshot_metadata_ptr != nullptr)
+        {
+            auto prev_parts = parts;
+            auto prev_alter_conversions = alter_conversions;
+            parts.clear();
+            alter_conversions.clear();
+
+            auto alter_it = prev_alter_conversions.begin();
+
+            for (const auto & part : prev_parts)
+            {
+                if (!part->isEmpty())
+                {
+                    auto snapshot_block_num = snapshot_metadata_ptr->getSnapshotBlockNumByPartitionId(part->partition.getID(data));
+                    LOG_TRACE(log, "Select snapshot part {}, part_max_block={}, snapshot_block_num={}",
+                              part->name, part->info.max_block, snapshot_block_num);
+                    if (part->info.max_block <= snapshot_block_num)
+                    {
+                        parts.push_back(part);
+                        alter_conversions.push_back(*alter_it);
+                    }
+                }
+                ++alter_it;
+            }
+        }
+        LOG_INFO(log, "Read {} parts from snapshot.", parts.size());
+    }
+
     /// If merge_tree_select_result_ptr != nullptr, we use analyzed result so parts will always be empty.
     if (merge_tree_select_result_ptr)
     {

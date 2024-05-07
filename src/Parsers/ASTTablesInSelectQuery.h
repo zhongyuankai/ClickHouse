@@ -52,6 +52,7 @@ struct ASTTableExpression : public IAST
 
     /// Modifiers
     bool final = false;
+    bool snapshot = false;
     ASTPtr sample_size;
     ASTPtr sample_offset;
 

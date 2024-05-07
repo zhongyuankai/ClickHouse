@@ -387,7 +387,10 @@ BlockIO InterpreterInsertQuery::execute()
     if (query.partition_by && !table->supportsPartitionBy())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "PARTITION BY clause is not supported by storage");
 
-    auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), settings.lock_acquire_timeout);
+    const String & query_id = getContext()->getInitialQueryId();
+    auto table_lock = table->lockForShare(query_id, settings.lock_acquire_timeout);
+    /// Read-write lock, prohibits data writing when creating a materialized view.
+    auto table_lock_insert = table->lockForInsert(query_id, settings.lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
     auto query_sample_block = getSampleBlock(query, table, metadata_snapshot);
@@ -631,6 +634,7 @@ BlockIO InterpreterInsertQuery::execute()
     }
 
     res.pipeline.addResources(std::move(resources));
+    res.pipeline.addTableLock(std::move(table_lock_insert));
 
     res.pipeline.addStorageHolder(table);
     if (inner_table)

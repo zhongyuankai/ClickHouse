@@ -44,6 +44,7 @@
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/GinFilter.h>
+#include <Interpreters/JoinedTables.h>
 
 #include <Access/Common/AccessRightsElement.h>
 
@@ -1241,6 +1242,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return doCreateOrReplaceTable(create, properties);
     }
 
+    LockBaseTables lock_base_tables(getContext(), create);
+
     /// Actually creates table
     bool created = doCreateTable(create, properties, ddl_guard);
     ddl_guard.reset();
@@ -1790,6 +1793,51 @@ void InterpreterCreateQuery::addColumnsDescriptionToCreateQueryIfNecessary(ASTCr
     {
         ASTPtr columns = std::make_shared<ASTExpressionList>(*create_query_from_storage.columns_list->columns);
         create.columns_list->set(create.columns_list->columns, columns);
+    }
+}
+
+InterpreterCreateQuery::LockBaseTables::LockBaseTables(ContextPtr context, const ASTCreateQuery & create)
+{
+    /**
+     * If the query is a CREATE SELECT, should add a underling table lock for it:
+     * common table: no lock
+     * materialize view: no lock
+     * materialize view + populate: add lock
+     * materialize view + snapshot: add lock
+     */
+    if (context->getSettingsRef().allow_locktable_oncreate &&
+        create.select &&
+        !create.attach &&
+        create.is_materialized_view &&
+        (create.is_populate || create.is_snapshot))
+    {
+        table_lock_holders.reserve(create.select->list_of_selects->size());
+        for (auto & select: create.select->list_of_selects->children)
+        {
+            JoinedTables joined_tables(context, select->as<ASTSelectQuery &>());
+            if (joined_tables.isLeftTableSubquery() && (create.is_populate || create.is_snapshot))
+            {
+                LOG_INFO(&Poco::Logger::get("InterpreterCreateQuery"), "No support for snapshot or populate create when using subquery.");
+            }
+            else
+            {
+                auto table_storage = joined_tables.getLeftTableStorage();
+                if (table_storage)
+                {
+                    auto lock = table_storage->lockForMuteInsert(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
+                    table_lock_holders.emplace_back(lock);
+                    if (!create.is_populate && create.is_snapshot)
+                    {
+                        LOG_INFO(&Poco::Logger::get("InterpreterCreateQuery"), "Set snapshot for table {}.", table_storage->getStorageID().getFullTableName());
+                        joined_tables.getLeftTableStorage()->snapshot();
+                    }
+                }
+                else
+                {
+                    LOG_INFO(&Poco::Logger::get("InterpreterCreateQuery"), "Can't get left table to add a mutation lock.");
+                }
+            }
+        }
     }
 }
 

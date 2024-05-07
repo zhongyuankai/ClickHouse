@@ -1341,6 +1341,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserKeyword s_view("VIEW");
     ParserKeyword s_materialized("MATERIALIZED");
     ParserKeyword s_populate("POPULATE");
+    ParserKeyword s_snapshot("SNAPSHOT");
     ParserKeyword s_or_replace("OR REPLACE");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -1366,6 +1367,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     bool is_ordinary_view = false;
     bool is_materialized_view = false;
     bool is_populate = false;
+    bool is_snapshot = false;
     bool is_create_empty = false;
     bool replace_view = false;
 
@@ -1433,12 +1435,16 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         /// Internal ENGINE for MATERIALIZED VIEW must be specified.
         /// Actually check it in Interpreter as default_table_engine can be set
         storage_p.parse(pos, storage, expected);
-
-        if (s_populate.ignore(pos, expected))
-            is_populate = true;
-        else if (ParserKeyword{"EMPTY"}.ignore(pos, expected))
-            is_create_empty = true;
     }
+
+    if (s_populate.ignore(pos, expected))
+        is_populate = true;
+    else if (ParserKeyword{"EMPTY"}.ignore(pos, expected))
+        is_create_empty = true;
+
+    /// [SNAPSHOT]
+    if (s_snapshot.ignore(pos, expected))
+        is_snapshot = true;
 
     /// AS SELECT ...
     if (!s_as.ignore(pos, expected))
@@ -1457,6 +1463,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     query->is_ordinary_view = is_ordinary_view;
     query->is_materialized_view = is_materialized_view;
     query->is_populate = is_populate;
+    query->is_snapshot = is_snapshot;
     query->is_create_empty = is_create_empty;
     query->replace_view = replace_view;
 

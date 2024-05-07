@@ -638,6 +638,9 @@ class IColumn;
     M(UInt64, max_insert_queries, 0, "Maximum number of concurrently INSERT queries. Zero means unlimited.", 0) \
     M(UInt64, max_select_queries, 0, "Maximum number of concurrently SELECT queries. Zero means unlimited.", 0) \
     M(Bool, enable_fast_materialize_ttl, true, "Enable FAST_MATERIALIZE_TTL mutation command to speed up MODIFY TTL operation.", 0) \
+    M(Bool, allow_experimental_snapshot, true, "Support snapshot in storage merge tree.", 0) \
+    M(Bool, read_experimental_snapshot, false, "Read snapshot in storage merge tree.", 0) \
+    M(Bool, allow_locktable_oncreate, true, "Add a underlying table lock when create a table or materialize view", 0) \
     /** Experimental feature for moving data between shards. */ \
     \
     M(Bool, allow_experimental_query_deduplication, false, "Experimental data deduplication for SELECT queries based on part UUIDs", 0) \

@@ -124,6 +124,23 @@ StorageMergeTree::StorageMergeTree(
 
     increment.set(getMaxBlockNumber());
 
+    if (context_->getSettingsRef().allow_experimental_snapshot)
+    {
+        auto snapshot_file_path = fs::path(getRelativeDataPath()) / "snapshot_block.txt";
+        for (const auto & disk : getDisks())
+        {
+            if (disk->exists(snapshot_file_path))
+            {
+                auto new_snapshot_metadata = std::make_unique<MergeTreeSnapshotMetadata>(-1);
+                auto buffer = disk->readFile(snapshot_file_path);
+                new_snapshot_metadata->read(*buffer);
+                snapshot_metadata.set(std::move(new_snapshot_metadata));
+                LOG_INFO(log, "Load snapshot metadata from disk {}.", disk->getPath());
+                break;
+            }
+        }
+    }
+
     loadMutations();
     loadDeduplicationLog();
 }
@@ -333,6 +350,26 @@ void StorageMergeTree::alter(
         changeSettings(new_metadata.settings_changes, table_lock_holder);
         DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(local_context, table_id, new_metadata);
     }
+    else if (commands.isSnapshotAlter())
+    {
+        for (const auto & command : commands)
+        {
+            if (command.type == AlterCommand::Type::ADD_SNAPSHOT)
+            {
+                if (getSnapshotMetadata() != nullptr && command.if_not_exists)
+                    return;
+
+                snapshot();
+            }
+            else if (command.type == AlterCommand::Type::DROP_SNAPSHOT)
+            {
+                if (getSnapshotMetadata() == nullptr && command.if_exists)
+                    return;
+
+                dropSnapshot();
+            }
+        }
+    }
     else
     {
         if (!maybe_mutation_commands.empty() && maybe_mutation_commands.containBarrierCommand())
@@ -392,6 +429,42 @@ void StorageMergeTree::alter(
             deduplication_log->setDeduplicationWindowSize(new_storage_settings->non_replicated_deduplication_window);
         }
     }
+}
+
+void StorageMergeTree::snapshot()
+{
+    auto snapshot_file_path = fs::path(getRelativeDataPath()) / "snapshot_block.txt";
+    for (const auto & disk : getDisks())
+    {
+        if (disk->isBroken())
+            continue;
+
+        auto buf = disk->writeFile(snapshot_file_path);
+        auto new_snapshot_metadata = std::make_unique<MergeTreeSnapshotMetadata>(-1);
+        new_snapshot_metadata->snapshot_block_num = increment.get();
+        new_snapshot_metadata->write(*buf);
+        snapshot_metadata.set(std::move(new_snapshot_metadata));
+        return;
+    }
+    throw Exception(ErrorCodes::ABORTED, "No disk can be used.");
+}
+
+void StorageMergeTree::dropSnapshot()
+{
+    auto snapshot_file_path = fs::path(getRelativeDataPath()) / "snapshot_block.txt";
+    for (const auto & disk : getDisks())
+    {
+        if (disk->isBroken() || !disk->exists(snapshot_file_path))
+            continue;
+
+        disk->removeFile(snapshot_file_path);
+    }
+    snapshot_metadata.set(nullptr);
+}
+
+MergeTreeSnapshotMetadataPtr StorageMergeTree::getSnapshotMetadata() const
+{
+    return snapshot_metadata.get();
 }
 
 
@@ -877,7 +950,11 @@ MergeMutateSelectedEntryPtr StorageMergeTree::selectPartsToMerge(
     CurrentlyMergingPartsTaggerPtr merging_tagger;
     MergeList::EntryPtr merge_entry;
 
-    auto can_merge = [this, &lock](const DataPartPtr & left, const DataPartPtr & right, const MergeTreeTransaction * tx, String & disable_reason) -> bool
+    auto can_merge = [this, &lock](const DataPartPtr & left,
+                                   const DataPartPtr & right,
+                                   const MergeTreeTransaction * tx,
+                                   String & disable_reason,
+                                   MergeTreeSnapshotMetadataPtr & snapshot_metadata_ptr) -> bool
     {
         if (tx)
         {
@@ -897,6 +974,14 @@ MergeMutateSelectedEntryPtr StorageMergeTree::selectPartsToMerge(
                 disable_reason = "Some part is locked for removal in another cuncurrent transaction";
                 return false;
             }
+        }
+
+        if (snapshot_metadata_ptr != nullptr && left)
+        {
+            auto snapshot_block_num = snapshot_metadata_ptr->getSnapshotBlockNumByPartitionId("");
+            bool is_barrier = left->info.max_block <= snapshot_block_num && snapshot_block_num < right->info.min_block;
+            if (is_barrier)
+                return false;
         }
 
         /// This predicate is checked for the first part of each range.

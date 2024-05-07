@@ -84,6 +84,13 @@ private:
         ProjectionsDescription projections;
     };
 
+    struct LockBaseTables
+    {
+        std::vector<TableLockHolder> table_lock_holders;
+        LockBaseTables(ContextPtr context, const ASTCreateQuery & create);
+        ~LockBaseTables() { table_lock_holders.clear(); }
+    };
+
     BlockIO createDatabase(ASTCreateQuery & create);
     BlockIO createTable(ASTCreateQuery & create);
 

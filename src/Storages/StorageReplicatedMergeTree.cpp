@@ -466,6 +466,14 @@ StorageReplicatedMergeTree::StorageReplicatedMergeTree(
         }
     }
 
+    if (getContext()->getSettingsRef().allow_experimental_snapshot)
+    {
+        snapshot_updating_task = getContext()->getSchedulePool().createTask(
+            getStorageID().getFullTableName() + " (StorageReplicatedMergeTree::snapshotUpdatingTask)", [this]{ snapshotUpdatingTask(); });
+
+        snapshot_updating_task->deactivate();
+    }
+
     if (attach)
     {
         LOG_INFO(log, "Table will be in readonly mode until initialization is finished");
@@ -3228,7 +3236,6 @@ void StorageReplicatedMergeTree::queueUpdatingTask()
     }
 }
 
-
 void StorageReplicatedMergeTree::mutationsUpdatingTask()
 {
     try
@@ -5022,6 +5029,10 @@ void StorageReplicatedMergeTree::partialShutdown()
     LOG_TRACE(log, "Waiting for threads to finish");
     merge_selecting_task->deactivate();
     queue_updating_task->deactivate();
+
+    if (snapshot_updating_task)
+        snapshot_updating_task->deactivate();
+
     mutations_updating_task->deactivate();
     mutations_finalizing_task->deactivate();
 
@@ -5769,6 +5780,27 @@ void StorageReplicatedMergeTree::alter(
         DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(query_context, table_id, future_metadata);
         return;
     }
+    else if (commands.isSnapshotAlter())
+    {
+        for (const auto & command: commands)
+        {
+            if (command.type == AlterCommand::Type::ADD_SNAPSHOT)
+            {
+                if (getSnapshotMetadata() != nullptr && command.if_not_exists)
+                    return;
+
+                snapshot();
+            }
+            else if (command.type == AlterCommand::Type::DROP_SNAPSHOT)
+            {
+                if (getSnapshotMetadata() == nullptr && command.if_exists)
+                    return;
+
+                dropSnapshot();
+            }
+        }
+        return;
+    }
 
     auto ast_to_str = [](ASTPtr query) -> String
     {
@@ -5977,6 +6009,123 @@ void StorageReplicatedMergeTree::alter(
         waitMutation(*mutation_znode, query_context->getSettingsRef().alter_sync);
         LOG_DEBUG(log, "Data changes applied.");
     }
+}
+
+void StorageReplicatedMergeTree::snapshotUpdatingTask()
+{
+    try
+    {
+        LOG_DEBUG(log, "Updating snapshot metadata from zk.");
+        auto snapshot_path = fs::path(zookeeper_path) / "snapshot_block.txt";
+        auto zookeeper = getZooKeeper();
+        if (zookeeper->existsWatch(snapshot_path, nullptr, snapshot_updating_task->getWatchCallback()))
+        {
+            String metadata_str = zookeeper->get(snapshot_path);
+            auto new_snapshot_metadata = MergeTreeSnapshotMetadata::parse(metadata_str);
+            LOG_DEBUG(log, "Parse snapshot metadata from zk, {}.", metadata_str);
+            snapshot_metadata.set(std::move(new_snapshot_metadata));
+        }
+        else
+        {
+            snapshot_metadata.set(nullptr);
+        }
+    }
+    catch (const Coordination::Exception & e)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+
+        if (e.code == Coordination::Error::ZSESSIONEXPIRED)
+        {
+            restarting_thread.wakeup();
+            return;
+        }
+
+        snapshot_updating_task->scheduleAfter(1000);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+
+        snapshot_updating_task->scheduleAfter(1000);
+    }
+}
+
+void StorageReplicatedMergeTree::snapshot()
+{
+    auto snapshot_path = fs::path(zookeeper_path) / "snapshot_block.txt";
+    auto zookeeper = getZooKeeper();
+    if (zookeeper->exists(snapshot_path))
+    {
+        LOG_INFO(log, "Duplication snapshot command set! Just ignore it.");
+        String metadata_str = zookeeper->get(snapshot_path);
+        auto new_snapshot_metadata = MergeTreeSnapshotMetadata::parse(metadata_str);
+        snapshot_metadata.set(std::move(new_snapshot_metadata));
+    }
+    else
+    {
+        EphemeralLocksInAllPartitions block_number_locks(zookeeper_path + "/block_numbers", "block-", zookeeper_path + "/temp", *zookeeper);
+        auto new_snapshot_metadata = std::make_unique<MergeTreeSnapshotMetadata>(-1);
+        for (const auto & lock_info : block_number_locks.getLocks())
+        {
+            new_snapshot_metadata->partition_snapshots[lock_info.partition_id] = lock_info.number;
+        }
+
+        String snapshot_metadata_str = new_snapshot_metadata->toString();
+
+        snapshot_metadata.set(std::move(new_snapshot_metadata));
+
+        /// check the path again because it may be created by another process.
+        if (!zookeeper->exists(snapshot_path))
+        {
+            try
+            {
+                zookeeper->create(snapshot_path, snapshot_metadata_str, zkutil::CreateMode::Persistent);
+            }
+            catch (Coordination::Exception & e)
+            {
+                if (e.code == Coordination::Error::ZNODEEXISTS)
+                {
+                    LOG_WARNING(log, "Zookeeper node may be created by another process, just ignore this error.");
+                }
+                else
+                {
+                    throw zkutil::KeeperException(e);
+                }
+            }
+        }
+
+        block_number_locks.unlock();
+    }
+}
+
+void StorageReplicatedMergeTree::dropSnapshot()
+{
+    auto snapshot_path = fs::path(zookeeper_path) / "snapshot_block.txt";
+    auto zookeeper = getZooKeeper();
+    if (zookeeper->exists(snapshot_path))
+    {
+        try
+        {
+            zookeeper->remove(snapshot_path);
+        }
+        catch (Coordination::Exception & e)
+        {
+            if (e.code == Coordination::Error::ZNONODE)
+            {
+                LOG_WARNING(log, "Zookeeper node may be deleted by another process, just ignore this error.");
+            }
+            else
+            {
+                throw zkutil::KeeperException(e);
+            }
+        }
+    }
+    snapshot_metadata.set(nullptr);
+}
+
+MergeTreeSnapshotMetadataPtr StorageReplicatedMergeTree::getSnapshotMetadata() const
+{
+    return snapshot_metadata.get();
 }
 
 /// If new version returns ordinary name, else returns part name containing the first and last month of the month

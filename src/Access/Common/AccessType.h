@@ -61,6 +61,10 @@ enum class AccessType
     M(ALTER_DROP_CONSTRAINT, "DROP CONSTRAINT", TABLE, ALTER_CONSTRAINT) \
     M(ALTER_CONSTRAINT, "CONSTRAINT", GROUP, ALTER_TABLE) /* allows to execute ALTER {ADD|DROP} CONSTRAINT */\
     \
+    M(ALTER_ADD_SNAPSHOT, "ADD SNAPSHOT", TABLE, ALTER_SNAPSHOT) \
+    M(ALTER_DROP_SNAPSHOT, "DROP SNAPSHOT", TABLE, ALTER_SNAPSHOT) \
+    M(ALTER_SNAPSHOT, "SNAPSHOT", GROUP, ALTER_TABLE) /* allows to execute ALTER {ADD|DROP} SNAPSHOT */\
+    \
     M(ALTER_TTL, "ALTER MODIFY TTL, MODIFY TTL", TABLE, ALTER_TABLE) /* allows to execute ALTER MODIFY TTL */\
     M(ALTER_MATERIALIZE_TTL, "MATERIALIZE TTL", TABLE, ALTER_TABLE) /* allows to execute ALTER MATERIALIZE TTL;
                                                                        enabled implicitly by the grant ALTER_TABLE */\

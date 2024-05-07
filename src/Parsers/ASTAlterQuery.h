@@ -50,6 +50,9 @@ public:
         ADD_CONSTRAINT,
         DROP_CONSTRAINT,
 
+        ADD_SNAPSHOT,
+        DROP_SNAPSHOT,
+
         ADD_PROJECTION,
         DROP_PROJECTION,
         MATERIALIZE_PROJECTION,

@@ -36,6 +36,8 @@ struct AlterCommand
         DROP_INDEX,
         ADD_CONSTRAINT,
         DROP_CONSTRAINT,
+        ADD_SNAPSHOT,
+        DROP_SNAPSHOT,
         ADD_PROJECTION,
         DROP_PROJECTION,
         MODIFY_TTL,
@@ -161,6 +163,9 @@ struct AlterCommand
     /// Checks that only comment changed by alter
     bool isCommentAlter() const;
 
+    /// Checks that only snapshot changed by alter
+    bool isSnapshotAlter() const;
+
     /// Checks that any TTL changed by alter
     bool isTTLAlter(const StorageInMemoryMetadata & metadata) const;
 
@@ -204,6 +209,9 @@ public:
 
     /// All commands modify comments only.
     bool isCommentAlter() const;
+
+    /// At least one command modify snapshot.
+    bool isSnapshotAlter() const;
 
     /// Return mutation commands which some storages may execute as part of
     /// alter. If alter can be performed as pure metadata update, than result is

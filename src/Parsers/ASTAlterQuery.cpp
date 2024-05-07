@@ -213,6 +213,16 @@ void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & 
                       << (settings.hilite ? hilite_none : "");
         constraint->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::ADD_SNAPSHOT)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "ADD SNAPSHOT " << (if_not_exists ? "IF NOT EXISTS " : "")
+                      << (settings.hilite ? hilite_none : "");
+    }
+    else if (type == ASTAlterCommand::DROP_SNAPSHOT)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "DROP SNAPSHOT " << (if_exists ? "IF EXISTS " : "")
+                      << (settings.hilite ? hilite_none : "");
+    }
     else if (type == ASTAlterCommand::ADD_PROJECTION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "ADD PROJECTION " << (if_not_exists ? "IF NOT EXISTS " : "")

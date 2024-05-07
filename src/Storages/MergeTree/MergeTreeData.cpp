@@ -7173,7 +7173,8 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
     size_t min_sum_marks = std::numeric_limits<size_t>::max();
     if (settings.optimize_use_implicit_projections && metadata_snapshot->minmax_count_projection
         && !has_lightweight_delete_parts.load(std::memory_order_relaxed) /// Disable ReadFromStorage for parts with lightweight.
-        && merging_params.mode != MergeTreeData::MergingParams::Unique) /// Disable ReadFromStorage for parts with UniquerMergeTree.
+        && merging_params.mode != MergeTreeData::MergingParams::Unique /// Disable ReadFromStorage for parts with UniquerMergeTree.
+        && !select_query->snapshot()) /// Disable snapshot.
         add_projection_candidate(*metadata_snapshot->minmax_count_projection, true);
     std::optional<ProjectionCandidate> minmax_count_projection_candidate;
     if (!candidates.empty())

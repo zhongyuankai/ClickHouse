@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Storages/MergeTree/MergeTreePartsMover.h>
 #include <Storages/MergeTree/MergeTreeWriteAheadLog.h>
+#include <Storages/MergeTree/MergeTreeSnapshotMetadata.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/MergeTree/ZeroCopyLock.h>
 #include <Storages/MergeTree/TemporaryParts.h>
@@ -450,7 +451,7 @@ public:
 
     bool areAsynchronousInsertsEnabled() const override { return getSettings()->async_insert; }
 
-    bool supportsTrivialCountOptimization() const override { return !hasLightweightDeletedMask() && merging_params.mode != MergingParams::Unique; }
+    bool supportsTrivialCountOptimization() const override { return !hasLightweightDeletedMask() && merging_params.mode != MergingParams::Unique && getSnapshotMetadata() == nullptr; }
 
     NamesAndTypesList getVirtuals() const override;
 
@@ -978,6 +979,8 @@ public:
     getPrimaryKeyAndSkipIndicesExpression(const StorageMetadataPtr & metadata_snapshot, const MergeTreeIndices & indices) const;
     ExpressionActionsPtr
     getSortingKeyAndSkipIndicesExpression(const StorageMetadataPtr & metadata_snapshot, const MergeTreeIndices & indices) const;
+
+    MultiVersion<MergeTreeSnapshotMetadata> snapshot_metadata;
 
     /// Get compression codec for part according to TTL rules and <compression>
     /// section from config.xml.
