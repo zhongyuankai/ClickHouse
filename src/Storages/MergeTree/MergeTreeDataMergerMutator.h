@@ -43,7 +43,8 @@ public:
     using AllowedMergingPredicate = std::function<bool (const MergeTreeData::DataPartPtr &,
                                                         const MergeTreeData::DataPartPtr &,
                                                         const MergeTreeTransaction *,
-                                                        String &)>;
+                                                        String &,
+                                                        MergeTreeSnapshotMetadataPtr &)>;
 
     explicit MergeTreeDataMergerMutator(MergeTreeData & data_);
 

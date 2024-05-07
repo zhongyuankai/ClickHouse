@@ -130,6 +130,12 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
             << "FINAL" << (settings.hilite ? hilite_none : "");
     }
 
+    if (snapshot)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str
+            << "SNAPSHOT" << (settings.hilite ? hilite_none : "");
+    }
+
     if (sample_size)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str

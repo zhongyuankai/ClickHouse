@@ -119,6 +119,9 @@ public:
 
     void addStorageHolder(StoragePtr storage);
 
+    /// Do not allow to change the table while the processors of pipe are alive.
+    void addTableLock(TableLockHolder lock) { table_locks.emplace_back(std::move(lock)); }
+
     /// Existing resources are not released here, see move ctor for QueryPlanResourceHolder.
     void addResources(QueryPlanResourceHolder holder) { resources = std::move(holder); }
 
@@ -142,6 +145,8 @@ public:
 
 private:
     QueryPlanResourceHolder resources;
+
+    std::vector<TableLockHolder> table_locks;
 
     ProgressCallback progress_callback;
     std::shared_ptr<const EnabledQuota> quota;

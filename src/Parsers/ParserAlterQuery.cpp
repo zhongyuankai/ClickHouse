@@ -49,6 +49,9 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_add_constraint("ADD CONSTRAINT");
     ParserKeyword s_drop_constraint("DROP CONSTRAINT");
 
+    ParserKeyword s_add_snapshot("ADD SNAPSHOT");
+    ParserKeyword s_drop_snapshot("DROP SNAPSHOT");
+
     ParserKeyword s_add_projection("ADD PROJECTION");
     ParserKeyword s_drop_projection("DROP PROJECTION");
     ParserKeyword s_clear_projection("CLEAR PROJECTION");
@@ -466,6 +469,21 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                     return false;
 
                 command->type = ASTAlterCommand::DROP_CONSTRAINT;
+                command->detach = false;
+            }
+            else if (s_add_snapshot.ignore(pos, expected))
+            {
+                if (s_if_not_exists.ignore(pos, expected))
+                    command->if_not_exists = true;
+
+                command->type = ASTAlterCommand::ADD_SNAPSHOT;
+            }
+            else if (s_drop_snapshot.ignore(pos, expected))
+            {
+                if (s_if_exists.ignore(pos, expected))
+                    command->if_exists = true;
+
+                command->type = ASTAlterCommand::DROP_SNAPSHOT;
                 command->detach = false;
             }
             else if (s_detach_partition.ignore(pos, expected))

@@ -1426,6 +1426,7 @@ const char * ParserAlias::restricted_keywords[] =
     "BETWEEN",
     "CROSS",
     "FINAL",
+    "SNAPSHOT",
     "FORMAT",
     "FROM",
     "FULL",

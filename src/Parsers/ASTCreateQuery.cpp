@@ -437,6 +437,9 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     else if (is_create_empty)
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " EMPTY" << (settings.hilite ? hilite_none : "");
 
+    if (is_snapshot)
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " SNAPSHOT" << (settings.hilite ? hilite_none : "");
+
     if (select)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS"

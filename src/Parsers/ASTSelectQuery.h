@@ -133,6 +133,7 @@ public:
     const ASTTablesInSelectQueryElement * join() const;
     bool hasJoin() const;
     bool final() const;
+    bool snapshot() const;
     bool withFill() const;
     void replaceDatabaseAndTable(const String & database_name, const String & table_name);
     void replaceDatabaseAndTable(const StorageID & table_id);

@@ -71,6 +71,18 @@ TableLockHolder IStorage::tryLockForShare(const String & query_id, const std::ch
     return result;
 }
 
+TableLockHolder IStorage::lockForInsert(const DB::String & query_id, const std::chrono::milliseconds & acquire_timeout)
+{
+    TableLockHolder result = tryLockTimed(insert_lock, RWLockImpl::Read, query_id, acquire_timeout);
+    return result;
+}
+
+TableLockHolder IStorage::lockForMuteInsert(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
+{
+    TableLockHolder result = tryLockTimed(insert_lock, RWLockImpl::Write, query_id, acquire_timeout);
+    return result;
+}
+
 std::optional<IStorage::AlterLockHolder> IStorage::tryLockForAlter(const std::chrono::milliseconds & acquire_timeout)
 {
     AlterLockHolder lock{alter_lock, std::defer_lock};

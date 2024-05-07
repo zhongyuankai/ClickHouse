@@ -33,6 +33,10 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (ParserKeyword("FINAL").ignore(pos, expected))
         res->final = true;
 
+    /// SNAPSHOT
+    if (!res->final && ParserKeyword("SNAPSHOT").ignore(pos, expected))
+        res->snapshot = true;
+
     /// SAMPLE number
     if (ParserKeyword("SAMPLE").ignore(pos, expected))
     {

@@ -1,0 +1,46 @@
+Test MergeTree snapshot
+Add snapshot
+3
+2
+2
+Drop snapshot
+3
+Create materialized view and add snapshot
+4
+3
+Test merge
+9
+3
+Drop base table snapshot
+9
+Test `allow_locktable_oncreate` setting
+10
+10
+Test ReplicatedMergeTree snapshot
+Add snapshot
+0
+2
+0
+0
+Drop snapshot
+0
+2
+Add snapshot again
+3
+2
+2
+Drop snapshot again
+3
+Create materialized view and add snapshot
+1
+4
+3
+Test merge
+9
+3
+Drop base table snapshot
+9
+Test `allow_locktable_oncreate` setting
+1
+10
+10

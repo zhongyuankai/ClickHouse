@@ -186,6 +186,10 @@ public:
 
     void alter(const AlterCommands & commands, ContextPtr query_context, AlterLockHolder & table_lock_holder) override;
 
+    void snapshot() override;
+    void dropSnapshot() override;
+    MergeTreeSnapshotMetadataPtr getSnapshotMetadata() const override;
+
     void mutate(const MutationCommands & commands, ContextPtr context) override;
     void waitMutation(const String & znode_name, size_t mutations_sync) const;
     std::vector<MergeTreeMutationStatus> getMutationsStatus() const override;
@@ -498,6 +502,8 @@ private:
     bool queue_update_in_progress = false;
     BackgroundSchedulePool::TaskHolder queue_updating_task;
 
+    BackgroundSchedulePool::TaskHolder snapshot_updating_task;
+
     BackgroundSchedulePool::TaskHolder mutations_updating_task;
     Coordination::WatchCallbackPtr mutations_watch_callback;
 
@@ -700,6 +706,10 @@ private:
     /** Updates the queue.
       */
     void queueUpdatingTask();
+
+    /** Update snapshot.
+     */
+    void snapshotUpdatingTask();
 
     void mutationsUpdatingTask();
 

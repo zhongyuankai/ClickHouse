@@ -2254,10 +2254,11 @@ bool BaseMergePredicate<VirtualPartsT, MutationsStateT>::operator()(
     const MergeTreeData::DataPartPtr & left,
     const MergeTreeData::DataPartPtr & right,
     const MergeTreeTransaction *,
-    String & out_reason) const
+    String & out_reason,
+    MergeTreeSnapshotMetadataPtr & snapshot_metadata_ptr) const
 {
     if (left)
-        return canMergeTwoParts(left, right, out_reason);
+        return canMergeTwoParts(left, right, out_reason, snapshot_metadata_ptr);
     else
         return canMergeSinglePart(right, out_reason);
 }
@@ -2266,7 +2267,8 @@ template<typename VirtualPartsT, typename MutationsStateT>
 bool BaseMergePredicate<VirtualPartsT, MutationsStateT>::canMergeTwoParts(
     const MergeTreeData::DataPartPtr & left,
     const MergeTreeData::DataPartPtr & right,
-    String & out_reason) const
+    String & out_reason,
+    MergeTreeSnapshotMetadataPtr & snapshot_metadata_ptr) const
 {
     /// A sketch of a proof of why this method actually works:
     ///
@@ -2329,6 +2331,15 @@ bool BaseMergePredicate<VirtualPartsT, MutationsStateT>::canMergeTwoParts(
 
     Int64 left_max_block = left->info.max_block;
     Int64 right_min_block = right->info.min_block;
+    if (snapshot_metadata_ptr != nullptr)
+    {
+        const Int64 snapshot_block_num = snapshot_metadata_ptr->getSnapshotBlockNumByPartitionId(left->info.partition_id);
+        if (snapshot_block_num != -1 && left_max_block <= snapshot_block_num && snapshot_block_num < right_min_block)
+        {
+            return false;
+        }
+    }
+
     if (left_max_block > right_min_block)
         std::swap(left_max_block, right_min_block);
 

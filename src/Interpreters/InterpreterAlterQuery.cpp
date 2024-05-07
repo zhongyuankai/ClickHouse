@@ -481,6 +481,16 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_DROP_CONSTRAINT, database, table);
             break;
         }
+        case ASTAlterCommand::ADD_SNAPSHOT:
+        {
+            required_access.emplace_back(AccessType::ALTER_ADD_SNAPSHOT, database, table);
+            break;
+        }
+        case ASTAlterCommand::DROP_SNAPSHOT:
+        {
+            required_access.emplace_back(AccessType::ALTER_DROP_SNAPSHOT, database, table);
+            break;
+        }
         case ASTAlterCommand::ADD_PROJECTION:
         {
             required_access.emplace_back(AccessType::ALTER_ADD_PROJECTION, database, table);

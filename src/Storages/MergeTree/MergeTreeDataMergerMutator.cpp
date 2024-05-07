@@ -349,6 +349,8 @@ MergeTreeDataMergerMutator::MergeSelectingInfo MergeTreeDataMergerMutator::getPo
     /// collect min_age for each partition while iterating parts
     PartitionsInfo & partitions_info = res.partitions_info;
 
+    MergeTreeSnapshotMetadataPtr snapshot_metadata_ptr = data.getSnapshotMetadata();
+
     for (const MergeTreeData::DataPartPtr & part : data_parts)
     {
         const String & partition_id = part->info.partition_id;
@@ -370,7 +372,7 @@ MergeTreeDataMergerMutator::MergeSelectingInfo MergeTreeDataMergerMutator::getPo
             * So we have to check if this part is currently being inserted with quorum and so on and so forth.
             * Obviously we have to check it manually only for the first part
             * of each partition because it will be automatically checked for a pair of parts. */
-            if (!can_merge_callback(nullptr, part, txn.get(), out_disable_reason))
+            if (!can_merge_callback(nullptr, part, txn.get(), out_disable_reason, snapshot_metadata_ptr))
                 continue;
 
             /// This part can be merged only with next parts (no prev part exists), so start
@@ -382,7 +384,7 @@ MergeTreeDataMergerMutator::MergeSelectingInfo MergeTreeDataMergerMutator::getPo
         {
             /// If we cannot merge with previous part we had to start new parts
             /// interval (in the same partition)
-            if (!can_merge_callback(*prev_part, part, txn.get(), out_disable_reason))
+            if (!can_merge_callback(*prev_part, part, txn.get(), out_disable_reason, snapshot_metadata_ptr))
             {
                 /// Now we have no previous part
                 prev_part = nullptr;
@@ -394,7 +396,7 @@ MergeTreeDataMergerMutator::MergeSelectingInfo MergeTreeDataMergerMutator::getPo
                 /// for example, merge is already assigned for such parts, or they participate in quorum inserts
                 /// and so on.
                 /// Also we don't start new interval here (maybe all next parts cannot be merged and we don't want to have empty interval)
-                if (!can_merge_callback(nullptr, part, txn.get(), out_disable_reason))
+                if (!can_merge_callback(nullptr, part, txn.get(), out_disable_reason, snapshot_metadata_ptr))
                     continue;
 
                 /// Starting new interval in the same partition
@@ -600,11 +602,13 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectAllPartsToMergeWithinParti
     auto it = parts.begin();
     auto prev_it = it;
 
+    auto snapshot_metadata_ptr = data.getSnapshotMetadata();
+
     UInt64 sum_bytes = 0;
     while (it != parts.end())
     {
         /// For the case of one part, we check that it can be merged "with itself".
-        if ((it != parts.begin() || parts.size() == 1) && !can_merge(*prev_it, *it, txn.get(), out_disable_reason))
+        if ((it != parts.begin() || parts.size() == 1) && !can_merge(*prev_it, *it, txn.get(), out_disable_reason, snapshot_metadata_ptr))
         {
             return SelectPartsDecision::CANNOT_SELECT;
         }

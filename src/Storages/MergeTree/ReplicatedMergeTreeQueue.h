@@ -505,14 +505,16 @@ public:
     bool operator()(const MergeTreeData::DataPartPtr & left,
                     const MergeTreeData::DataPartPtr & right,
                     const MergeTreeTransaction * txn,
-                    String & out_reason) const;
+                    String & out_reason,
+                    MergeTreeSnapshotMetadataPtr & snapshot_metadata_ptr) const;
 
     /// Can we assign a merge with these two parts?
     /// (assuming that no merge was assigned after the predicate was constructed)
     /// If we can't and out_reason is not nullptr, set it to the reason why we can't merge.
     bool canMergeTwoParts(const MergeTreeData::DataPartPtr & left,
                           const MergeTreeData::DataPartPtr & right,
-                          String & out_reason) const;
+                          String & out_reason,
+                          MergeTreeSnapshotMetadataPtr & snapshot_metadata_ptr) const;
 
     /// Can we assign a merge this part and some other part?
     /// For example a merge of a part and itself is needed for TTL.

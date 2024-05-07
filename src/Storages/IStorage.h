@@ -68,6 +68,9 @@ using DatabaseAndTableName = std::pair<String, String>;
 class BackupEntriesCollector;
 class RestorerFromBackup;
 
+struct MergeTreeSnapshotMetadata;
+using MergeTreeSnapshotMetadataPtr = std::shared_ptr<const MergeTreeSnapshotMetadata>;
+
 struct ColumnSize
 {
     size_t marks = 0;
@@ -285,6 +288,9 @@ public:
     /// Similar to lockForShare, but returns a nullptr if the table is dropped while
     /// acquiring the lock instead of raising a TABLE_IS_DROPPED exception
     TableLockHolder tryLockForShare(const String & query_id, const std::chrono::milliseconds & acquire_timeout);
+
+    TableLockHolder lockForInsert(const String & query_id, const std::chrono::milliseconds & acquire_timeout);
+    TableLockHolder lockForMuteInsert(const String & query_id, const std::chrono::milliseconds & acquire_timeout);
 
     /// Lock table for alter. This lock must be acquired in ALTER queries to be
     /// sure, that we execute only one simultaneous alter. Doesn't affect share lock.
@@ -516,6 +522,21 @@ public:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method optimize is not supported by storage {}", getName());
     }
 
+    virtual void snapshot()
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Snapshot are not supported by storage {}", getName());
+    }
+
+    virtual void dropSnapshot()
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Drop snapshot are not supported by storage {}", getName());
+    }
+
+    virtual MergeTreeSnapshotMetadataPtr getSnapshotMetadata() const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Clean snapshot are not supported by storage {}", getName());
+    }
+
     /// Mutate the table contents
     virtual void mutate(const MutationCommands &, ContextPtr)
     {
@@ -697,6 +718,8 @@ private:
     /// DROP-like queries take this lock for write (lockExclusively), to be sure
     /// that all table threads finished.
     mutable RWLock drop_lock = RWLockImpl::create();
+
+    mutable RWLock insert_lock = RWLockImpl::create();
 };
 
 }
