@@ -460,7 +460,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeFromRanges(
 
         /// The size of the completely expired part of TTL drop is not affected by the merge pressure and the size of the storage space
         parts_to_merge = drop_ttl_selector.select(parts_ranges, data_settings->max_bytes_to_merge_at_max_space_in_pool);
-        if (!parts_to_merge.empty())
+        if (!parts_to_merge.empty() && !data_settings->ignore_merge_type)
         {
             future_part->merge_type = MergeType::TTLDelete;
         }
@@ -474,7 +474,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeFromRanges(
                 dry_run);
 
             parts_to_merge = delete_ttl_selector.select(parts_ranges, max_total_size_to_merge);
-            if (!parts_to_merge.empty())
+            if (!parts_to_merge.empty() && !data_settings->ignore_merge_type)
                 future_part->merge_type = MergeType::TTLDelete;
         }
 
@@ -488,7 +488,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeFromRanges(
                     dry_run);
 
             parts_to_merge = recompress_ttl_selector.select(parts_ranges, max_total_size_to_merge);
-            if (!parts_to_merge.empty())
+            if (!parts_to_merge.empty() && !data_settings->ignore_merge_type)
                 future_part->merge_type = MergeType::TTLRecompress;
         }
     }
