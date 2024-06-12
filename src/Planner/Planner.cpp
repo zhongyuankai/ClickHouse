@@ -290,6 +290,7 @@ Aggregator::Params getAggregatorParams(const PlannerContextPtr & planner_context
         settings.max_block_size,
         settings.enable_software_prefetch_in_aggregation,
         /* only_merge */ false,
+        settings.enable_one_nullable_key_aggregation_optimization,
         stats_collecting_params);
 
     return aggregator_params;

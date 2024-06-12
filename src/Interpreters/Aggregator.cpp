@@ -779,7 +779,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     if (has_nullable_key)
     {
         /// Optimization for one key
-        if (params.keys_size == 1 && !has_low_cardinality)
+        if (params.enable_one_nullable_key_aggregation_optimization && params.keys_size == 1 && !has_low_cardinality)
         {
             if (types_removed_nullable[0]->isValueRepresentedByNumber())
             {
