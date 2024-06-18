@@ -216,14 +216,10 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
                             global_ctx->future_part->parts.size(), global_ctx->part_bitmaps.size());
 
         int64_t max_seq_id = 0;
-        int64_t max_update_id = 0;
         for (const auto & part_bitmap : global_ctx->part_bitmaps)
-        {
             max_seq_id = std::max(max_seq_id, part_bitmap->getSeqId());
-            max_update_id = std::max(max_update_id, part_bitmap->getUpdateSeqId());
-        }
 
-        global_ctx->new_part_bitmap = PartBitmap::create(max_seq_id, max_update_id);
+        global_ctx->new_part_bitmap = PartBitmap::create(max_seq_id, max_seq_id);
     }
 #endif
 
