@@ -526,12 +526,15 @@ QueryProcessingStage::Enum StorageDistributed::getQueryProcessingStage(
         return QueryProcessingStage::FetchColumns;
     }
 
-    auto optimized_stage = getOptimizedQueryProcessingStage(query_info, settings);
-    if (optimized_stage)
+    if (settings.enable_optimize_query_processing_stage)
     {
-        if (*optimized_stage == QueryProcessingStage::Complete)
-            return std::min(to_stage, *optimized_stage);
-        return *optimized_stage;
+        auto optimized_stage = getOptimizedQueryProcessingStage(query_info, settings);
+        if (optimized_stage)
+        {
+            if (*optimized_stage == QueryProcessingStage::Complete)
+                return std::min(to_stage, *optimized_stage);
+            return *optimized_stage;
+        }
     }
 
     return QueryProcessingStage::WithMergeableState;

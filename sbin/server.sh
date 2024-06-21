@@ -9,7 +9,7 @@ usage="Usage: server.sh start|stop"
 
 case $command in
   (start)
-    export LD_LIBRARY_PATH="$base_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    #export LD_LIBRARY_PATH="$base_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     nohup $base_dir/bin/clickhouse-server --config-file=$base_dir/conf/config.xml 2>&1 &
     ;;
   (stop)
