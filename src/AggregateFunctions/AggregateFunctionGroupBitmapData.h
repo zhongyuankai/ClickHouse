@@ -447,9 +447,6 @@ public:
      */
     UInt8 rb_contains(UInt64 x) const /// NOLINT
     {
-        if (!std::is_same_v<T, UInt64> && x > rb_max())
-            return 0;
-
         if (isSmall())
             return small.find(static_cast<T>(x)) != small.end();
         else
