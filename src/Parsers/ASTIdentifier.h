@@ -47,6 +47,10 @@ public:
     const String & shortName() const { return name_parts.back(); }
     const String & name() const;
 
+    String getFirstNamePart() const;
+    String getSecondNamePart() const;
+    void collectAllIdentifierNames(IdentifierNameVector & vector) const override { vector.push_back(name()); }
+
     void restoreTable();  // TODO(ilezhankin): get rid of this
     std::shared_ptr<ASTTableIdentifier> createTable() const;  // returns |nullptr| if identifier is not table.
 

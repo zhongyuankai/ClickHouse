@@ -30,3 +30,8 @@ endif()
 if (ENABLE_TESTS)
     add_subdirectory(HiliteComparator)
 endif ()
+
+option(ENABLE_PARSERS_EXTEND "Build parsers extend programs in 'extend' subdirectories" OFF)
+if (ENABLE_PARSERS_EXTEND)
+    add_subdirectory(extend)
+endif ()

@@ -7,6 +7,12 @@ ClickHouse® is an open-source column-oriented database management system that a
 curl https://clickhouse.com/ | sh
 ```
 
+## Build Parser
+1. `mkdir build && cd build`
+2. `cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_PARSERS_EXTEND=ON`
+3. `ninja sql_parser` or `ninja sql_classifier`
+
+
 ## Useful Links
 
 * [Official website](https://clickhouse.com/) has a quick high-level overview of ClickHouse on the main page.

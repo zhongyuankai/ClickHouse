@@ -98,6 +98,20 @@ const String & ASTIdentifier::name() const
     return full_name;
 }
 
+String ASTIdentifier::getFirstNamePart() const
+{
+    if (name_parts.empty())
+        return "";
+    return name_parts[0];
+}
+
+String ASTIdentifier::getSecondNamePart() const
+{
+    if (name_parts.empty() || name_parts.size() < 2)
+        return "";
+    return name_parts[1];
+}
+
 void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     auto format_element = [&](const String & elem_name)
