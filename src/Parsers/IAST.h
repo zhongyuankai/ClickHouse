@@ -25,6 +25,7 @@ namespace ErrorCodes
 }
 
 using IdentifierNameSet = std::set<String>;
+using IdentifierNameVector = std::vector<String>;
 
 class WriteBuffer;
 using Strings = std::vector<String>;
@@ -55,6 +56,13 @@ public:
     virtual void appendColumnNameWithoutAlias(WriteBuffer &) const
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Trying to get name of not a column: {}", getID());
+    }
+
+    /** Get `vector` from the names of the identifiers */
+    virtual void collectAllIdentifierNames(IdentifierNameVector & vector) const
+    {
+        for (const auto & child : children)
+            child->collectAllIdentifierNames(vector);
     }
 
     /** Get the alias, if any, or the canonical name of the column, if it is not. */
