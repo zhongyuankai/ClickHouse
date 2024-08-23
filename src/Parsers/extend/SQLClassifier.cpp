@@ -14,7 +14,8 @@ int main(int, char **)
             break;
         }
 
-        if (char s = std::cin.get(); s != '#') {
+        if (char s = std::cin.get(); s != '#')
+        {
             std::cout << "expect delimiter '#' but found: " << s << '\n';
             break;
         }

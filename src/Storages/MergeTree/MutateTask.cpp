@@ -557,6 +557,10 @@ static NameSet collectFilesToSkip(
 {
     NameSet files_to_skip = source_part->getFileNamesWithoutChecksums();
 
+    /// Note that bitmap files cannot be skipped.
+    std::erase_if(files_to_skip, [](const String & file_name)
+        { return file_name == IMergeTreeDataPart::BITMAP_BIN_FILE_NAME || file_name == IMergeTreeDataPart:: KEY_ID_LOG_BIN_FILE_NAME; });
+
     /// Do not hardlink this file because it's always rewritten at the end of mutation.
     files_to_skip.insert(IMergeTreeDataPart::SERIALIZATION_FILE_NAME);
 
@@ -1284,7 +1288,7 @@ private:
         ctx->compression_codec
             = ctx->data->getCompressionCodecForPart(ctx->source_part->getBytesOnDisk(), ctx->source_part->ttl_infos, ctx->time_of_mutation);
 
-        NameSet entries_to_hardlink;
+        NameSet entries_to_hardlink{IMergeTreeDataPart::BITMAP_BIN_FILE_NAME, IMergeTreeDataPart:: KEY_ID_LOG_BIN_FILE_NAME};
 
         NameSet removed_indices;
         for (const auto & command : ctx->for_file_renames)

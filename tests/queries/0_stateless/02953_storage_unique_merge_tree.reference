@@ -293,3 +293,67 @@ e	85	5
 f	110	5
 g	295	10
 Test other partition operations
+Test add column for compact part
+0	15	c	5	0	0
+1	14	c	5	0	1
+2	13	c	5	0	2
+3	12	c	5	0	3
+4	11	c	5	0	4
+5	10	c	5	0	5
+6	9	c	5	0	6
+7	8	c	5	0	7
+8	7	c	5	0	8
+9	6	c	5	0	9
+Test add column for wide part
+0	15	c	5	0	0
+1	14	c	5	0	1
+2	13	c	5	0	2
+3	12	c	5	0	3
+4	11	c	5	0	4
+5	10	c	5	0	5
+6	9	c	5	0	6
+7	8	c	5	0	7
+8	7	c	5	0	8
+9	6	c	5	0	9
+Test drop column for compact part
+0	15	c	5	0
+1	14	c	5	1
+2	13	c	5	2
+3	12	c	5	3
+4	11	c	5	4
+5	10	c	5	5
+6	9	c	5	6
+7	8	c	5	7
+8	7	c	5	8
+9	6	c	5	9
+10	10	d	0	10
+11	9	d	1	11
+12	8	d	2	12
+13	7	d	3	13
+14	6	d	4	14
+15	5	d	5	15
+16	4	d	6	16
+17	3	d	7	17
+18	2	d	8	18
+19	1	d	9	19
+Test drop column for wide part
+0	15	c	5	0
+1	14	c	5	1
+2	13	c	5	2
+3	12	c	5	3
+4	11	c	5	4
+5	10	c	5	5
+6	9	c	5	6
+7	8	c	5	7
+8	7	c	5	8
+9	6	c	5	9
+10	10	d	0	10
+11	9	d	1	11
+12	8	d	2	12
+13	7	d	3	13
+14	6	d	4	14
+15	5	d	5	15
+16	4	d	6	16
+17	3	d	7	17
+18	2	d	8	18
+19	1	d	9	19

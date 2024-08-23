@@ -186,6 +186,20 @@ CREATE TABLE replicated_unique_merge_tree9(n1 UInt32, n2 UInt32, s String, v UIn
 INSERT INTO replicated_unique_merge_tree9 SELECT number, 30 - number, 'f', number % 10 FROM numbers(20, 10);
 ALTER TABLE replicated_unique_merge_tree7 REPLACE PARTITION tuple() FROM replicated_unique_merge_tree9; -- { serverError NOT_IMPLEMENTED }
 
+
+DROP TABLE IF EXISTS replicated_unique_merge_tree10;
+CREATE TABLE replicated_unique_merge_tree10(n1 UInt32, n2 UInt32, s String, v UInt32) ENGINE = ReplicatedUniqueMergeTree('/clickhouse/tables/{database}/test_02953/replicated_unique_merge_tree10', '1', n1, v) ORDER BY n2;
+
+SELECT 'Test add column';
+INSERT INTO replicated_unique_merge_tree10 SELECT number, 30 - number, 'f', number % 10 FROM numbers(20, 10);
+ALTER TABLE replicated_unique_merge_tree10 ADD COLUMN  n3 UInt32;
+SELECT *, _unique_key_id FROM replicated_unique_merge_tree10 ORDER BY n1;
+
+SELECT 'Test drop column';
+INSERT INTO replicated_unique_merge_tree10 SELECT number, 35 - number, 'g', number % 10, 10 FROM numbers(25, 10);
+ALTER TABLE replicated_unique_merge_tree10 DROP COLUMN n3;
+SELECT *, _unique_key_id FROM replicated_unique_merge_tree10 ORDER BY n1;
+
 DROP TABLE IF EXISTS replicated_unique_merge_tree1;
 DROP TABLE IF EXISTS replicated_unique_merge_tree2;
 DROP TABLE IF EXISTS replicated_unique_merge_tree3;
@@ -195,3 +209,4 @@ DROP TABLE IF EXISTS replicated_unique_merge_tree6;
 DROP TABLE IF EXISTS replicated_unique_merge_tree7;
 DROP TABLE IF EXISTS replicated_unique_merge_tree8;
 DROP TABLE IF EXISTS replicated_unique_merge_tree9;
+DROP TABLE IF EXISTS replicated_unique_merge_tree10;
