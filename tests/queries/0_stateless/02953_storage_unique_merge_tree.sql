@@ -153,4 +153,32 @@ CREATE TABLE test_tb(n1 UInt32, n2 UInt32, s String, v UInt32) ENGINE = UniqueMe
 INSERT INTO test_tb SELECT number, 30 - number, 'f', number % 10 FROM numbers(20, 10);
 ALTER TABLE unique_merge_tree REPLACE PARTITION tuple() FROM test_tb; -- { serverError NOT_IMPLEMENTED }
 
+DROP TABLE IF EXISTS unique_merge_tree1;
+CREATE TABLE unique_merge_tree1(n1 UInt32, n2 UInt32, s String, v UInt32) ENGINE = UniqueMergeTree(n1, v) ORDER BY n2;
+
+DROP TABLE IF EXISTS unique_merge_tree2;
+CREATE TABLE unique_merge_tree2(n1 UInt32, n2 UInt32, s String, v UInt32) ENGINE = UniqueMergeTree(n1, v) ORDER BY n2 SETTINGS min_bytes_for_wide_part=0;
+
+SELECT 'Test add column for compact part';
+INSERT INTO unique_merge_tree1 SELECT number, 15 - number, 'c', 5 FROM numbers(10);
+ALTER TABLE unique_merge_tree1 ADD COLUMN  n3 UInt32;
+SELECT *, _unique_key_id FROM unique_merge_tree1 ORDER BY n1;
+
+SELECT 'Test add column for wide part';
+INSERT INTO unique_merge_tree2 SELECT number, 15 - number, 'c', 5 FROM numbers(10);
+ALTER TABLE unique_merge_tree2 ADD COLUMN  n3 UInt32;
+SELECT *, _unique_key_id FROM unique_merge_tree2 ORDER BY n1;
+
+SELECT 'Test drop column for compact part';
+INSERT INTO unique_merge_tree1 SELECT number, 20 - number, 'd', number % 10, 5 FROM numbers(10, 10);
+ALTER TABLE unique_merge_tree1 DROP COLUMN n3;
+SELECT *, _unique_key_id FROM unique_merge_tree1 ORDER BY n1;
+
+SELECT 'Test drop column for wide part';
+INSERT INTO unique_merge_tree2 SELECT number, 20 - number, 'd', number % 10, 5 FROM numbers(10, 10);
+ALTER TABLE unique_merge_tree2 DROP COLUMN n3;
+SELECT *, _unique_key_id FROM unique_merge_tree2 ORDER BY n1;
+
 DROP TABLE IF EXISTS unique_merge_tree;
+DROP TABLE IF EXISTS unique_merge_tree1;
+DROP TABLE IF EXISTS unique_merge_tree2;

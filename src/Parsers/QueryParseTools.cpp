@@ -219,7 +219,8 @@ void cumulativeFilters(QueryFeature & feature, ASTPtr ast)
 }
 
 
-void getStatementFeature(ASTPtr ast, QueryFeature & feature) {
+void getStatementFeature(ASTPtr ast, QueryFeature & feature)
+{
     if (ast == nullptr)
         return;
 
@@ -267,7 +268,7 @@ void getStatementFeature(ASTPtr ast, QueryFeature & feature) {
         }
     }
 
-    /// acquire oder by
+    /// acquire order by
     if (ast->as<ASTOrderByElement>())
         feature.order_and_group += ast->getTreeHash().low64;
 
@@ -283,8 +284,8 @@ void getStatementFeature(ASTPtr ast, QueryFeature & feature) {
         getStatementFeature(child, feature);
 }
 
-
-String outputQueryClassId(const String & sql) {
+String outputQueryClassId(const String & sql)
+{
     try
     {
         ParserQuery parser(sql.data() + sql.length());

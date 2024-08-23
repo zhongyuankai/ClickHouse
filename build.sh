@@ -57,7 +57,7 @@ then
 
   rm -rf ./build
   mkdir ./build && cd ./build
-  cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++-16 -DCMAKE_C_COMPILER=clang-16
+  cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_COMPILER=clang++-16 -DCMAKE_C_COMPILER=clang-16 -DSPLIT_DEBUG_SYMBOLS=ON
 else
   cd ./build
 fi
@@ -73,7 +73,7 @@ then
     # Package clickhouse
     cd "${base_dir}"
     cp -R ./sbin/ /tmp/${CLICKHOUSE_VERSION}
-    cp ./build/programs/clickhouse /tmp/${CLICKHOUSE_VERSION}/bin
+    cp ./build/programs/stripped/bin/clickhouse /tmp/${CLICKHOUSE_VERSION}/bin
     cp -d ./build/programs/clickhouse-server /tmp/${CLICKHOUSE_VERSION}/bin
     cp -d ./build/programs/clickhouse-client /tmp/${CLICKHOUSE_VERSION}/bin
     cp -d ./build/programs/clickhouse-copier /tmp/${CLICKHOUSE_VERSION}/bin
