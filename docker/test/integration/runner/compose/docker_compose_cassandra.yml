@@ -1,5 +1,5 @@
 version: '2.3'
 services:
     cassandra1:
-        image: cassandra:4.0
+        image: clickhouse-test/cassandra:4.0
         restart: always

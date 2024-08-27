@@ -8,7 +8,7 @@ cluster = ClickHouseCluster(__file__)
 # Version 23.4 is the latest version to support writing in-memory parts.
 node = cluster.add_instance(
     "node_old",
-    image="clickhouse/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="23.4",
     stay_alive=True,
     with_installed_binary=True,

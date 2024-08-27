@@ -392,7 +392,7 @@ class ClickHouseCluster:
             "CLICKHOUSE_TESTS_DOCKERD_HOST"
         )
         self.docker_api_version = os.environ.get("DOCKER_API_VERSION")
-        self.docker_base_tag = os.environ.get("DOCKER_BASE_TAG", "latest")
+        self.docker_base_tag = os.environ.get("DOCKER_BASE_TAG", "v701")
 
         self.base_cmd = ["docker-compose"]
         if custom_dockerd_host:
@@ -946,7 +946,9 @@ class ClickHouseCluster:
 
         env_variables["keeper_binary"] = binary_path
         env_variables["keeper_cmd_prefix"] = keeper_cmd_prefix
-        env_variables["image"] = "clickhouse/integration-test:" + self.docker_base_tag
+        env_variables["image"] = (
+            "clickhouse-test/integration-test:" + self.docker_base_tag
+        )
         env_variables["user"] = str(os.getuid())
         env_variables["keeper_fs"] = "bind"
         for i in range(1, 4):
@@ -1563,7 +1565,7 @@ class ClickHouseCluster:
         allow_analyzer=True,
         hostname=None,
         env_variables=None,
-        image="clickhouse/integration-test",
+        image="clickhouse-test/integration-test",
         tag=None,
         stay_alive=False,
         ipv4_address=None,
@@ -3251,8 +3253,8 @@ class ClickHouseInstance:
         copy_common_configs=True,
         hostname=None,
         env_variables=None,
-        image="clickhouse/integration-test",
-        tag="latest",
+        image="clickhouse-test/integration-test",
+        tag="v701",
         stay_alive=False,
         ipv4_address=None,
         ipv6_address=None,

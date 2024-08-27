@@ -29,7 +29,7 @@ CONFIG_DIR_IN_REPO = "programs/server"
 INTEGRATION_DIR_IN_REPO = "tests/integration"
 SRC_DIR_IN_REPO = "src"
 
-DIND_INTEGRATION_TESTS_IMAGE_NAME = "clickhouse/integration-tests-runner"
+DIND_INTEGRATION_TESTS_IMAGE_NAME = "clickhouse-test/integration-tests-runner"
 
 
 def check_args_and_update_paths(args):
@@ -227,7 +227,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--docker-image-version",
-        default="latest",
+        default="v701",
         help="Version of docker image which runner will use to run tests",
     )
 

@@ -1,7 +1,7 @@
 version: '2.3'
 services:
   mysql_client:
-    image: mysql:5.7
+    image: clickhouse-test/mysql:5.7
     restart: always
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 1

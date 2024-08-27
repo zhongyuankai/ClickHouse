@@ -11,21 +11,21 @@ from argparse import ArgumentParser
 from datetime import datetime
 
 docker_images_origin = [
-    "clickhouse/test-util:latest",
-    "clickhouse/binary-builder:latest",
-    "clickhouse/test-base:latest",
-    "clickhouse/style-test:latest",
-    "clickhouse/unit-test:latest",
-    "clickhouse/fasttest:latest",
-    "clickhouse/stateless-test:latest",
-    "clickhouse/sqlancer-test:latest",
-    "clickhouse/sqllogic-test:latest",
-    "clickhouse/sqltest:latest",
-    "clickhouse/stateful-test:latest",
-    "clickhouse/integration-test:latest",
-    "clickhouse/integration-helper:latest",
-    "clickhouse/integration-tests-runner:latest",
-    "clickhouse/fuzzer:latest",
+    "clickhouse-test/test-util:v701",
+    "clickhouse-test/binary-builder:v701",
+    "clickhouse-test/test-base:v701",
+    "clickhouse-test/style-test:v701",
+    "clickhouse-test/unit-test:v701",
+    "clickhouse-test/fasttest:v701",
+    "clickhouse-test/stateless-test:v701",
+    "clickhouse-test/sqlancer-test:v701",
+    "clickhouse-test/sqllogic-test:v701",
+    "clickhouse-test/sqltest:v701",
+    "clickhouse-test/stateful-test:v701",
+    "clickhouse-test/integration-test:v701",
+    "clickhouse-test/integration-helper:v701",
+    "clickhouse-test/integration-tests-runner:v701",
+    "clickhouse-test/fuzzer:v701",
 ]
 
 DOCKER_IMAGES = docker_images_origin
@@ -77,7 +77,7 @@ def get_style_cmd(clickhouse_src_path: str, test_output_root: str) -> str:
     cmd = (
         f"docker run -u 1000:1000 --rm --name {CONTAINER_NAME} --cap-add=SYS_PTRACE "
         f"--volume={clickhouse_src_path}:/ClickHouse "
-        f"--volume={test_output_root}/test_output_style:/test_output clickhouse/style-test:latest"
+        f"--volume={test_output_root}/test_output_style:/test_output clickhouse-test/style-test:v701"
     )
     return cmd
 
@@ -85,7 +85,7 @@ def get_style_cmd(clickhouse_src_path: str, test_output_root: str) -> str:
 def get_unit_cmd(unit_tests_dbms_path: str, test_output_root: str) -> str:
     cmd = (
         f"docker run --rm --name {CONTAINER_NAME} --cap-add=SYS_PTRACE --volume={unit_tests_dbms_path}"
-        f":/unit_tests_dbms --volume={test_output_root}/test_output_unit:/test_output clickhouse/unit-test:latest"
+        f":/unit_tests_dbms --volume={test_output_root}/test_output_unit:/test_output clickhouse-test/unit-test:v701"
     )
     return cmd
 
@@ -98,7 +98,7 @@ def get_fasttest_cmd(clickhouse_src_path: str, test_output_root: str) -> str:
         "FASTTEST_CMAKE_FLAGS='-DCOMPILER_CACHE=sccache' -e COPY_CLICKHOUSE_BINARY_TO_OUTPUT=1 "
         f"--volume={test_output_root}/test_output_fasttest:/fasttest-workspace "
         f"--volume={clickhouse_src_path}:/ClickHouse "
-        f"--volume={test_output_root}/test_output_fasttest:/test_output clickhouse/fasttest:latest"
+        f"--volume={test_output_root}/test_output_fasttest:/test_output clickhouse-test/fasttest:v701"
     )
     return cmd
 
@@ -118,7 +118,7 @@ def get_stateless_cmd(
         "--cap-add=SYS_PTRACE -e "
         'S3_URL="https://s3.amazonaws.com/clickhouse-datasets" -e ADDITIONAL_OPTIONS="--hung-check --print-time '
         f'--order asc --no-random-settings --no-random-merge-tree-settings {test_list} " '
-        "clickhouse/stateless-test:latest"
+        "clickhouse-test/stateless-test:v701"
     )
     return cmd
 
@@ -128,7 +128,7 @@ def get_sqlancer_cmd(clickhouse_deb_package_path: str, test_output_root: str) ->
         f"docker run --rm --name {CONTAINER_NAME} --privileged --network=host "
         f"--volume={test_output_root}/test_output_sqlancer:/workspace "
         "--cap-add syslog --cap-add sys_admin --cap-add=SYS_PTRACE "
-        f"--volume={clickhouse_deb_package_path}:/programs clickhouse/sqlancer-test:latest"
+        f"--volume={clickhouse_deb_package_path}:/programs clickhouse-test/sqlancer-test:v701"
     )
     return cmd
 
@@ -141,7 +141,7 @@ def get_sqllogic_cmd(
         f"--volume={clickhouse_src_path}/tests:/clickhouse-tests "
         f"--volume={test_output_root}/test_output_sqllogic:/test_output "
         f"--volume={test_output_root}/test_output_sqllogic_server_log:/var/log/clickhouse-server "
-        "--cap-add=SYS_PTRACE clickhouse/sqllogic-test:latest"
+        "--cap-add=SYS_PTRACE clickhouse-test/sqllogic-test:v701"
     )
     return cmd
 
@@ -153,7 +153,7 @@ def get_sqltest_cmd(
         f"docker run --rm --name {CONTAINER_NAME} --privileged --network=host "
         f"--volume={test_output_root}/test_output_sqltest:/workspace "
         "--cap-add syslog --cap-add sys_admin --cap-add=SYS_PTRACE "
-        f"--volume={clickhouse_bin_package_debug_path}:/binary clickhouse/sqltest:latest"
+        f"--volume={clickhouse_bin_package_debug_path}:/binary clickhouse-test/sqltest:v701"
     )
     return cmd
 
@@ -174,7 +174,7 @@ def get_stateful_cmd(
         f"--volume={clickhouse_pre_dataset}:/dataset --cap-add=SYS_PTRACE "
         '-e S3_URL="https://s3.amazonaws.com/clickhouse-datasets" -e ADDITIONAL_OPTIONS="--hung-check '
         f'--print-time --order asc --no-random-settings --no-random-merge-tree-settings {test_list} " '
-        "clickhouse/stateful-test:latest"
+        "clickhouse-test/stateful-test:v701"
     )
     return cmd
 
@@ -210,7 +210,7 @@ def get_stress_cmd(
         f"--volume={clickhouse_src_path}/tests:/usr/share/clickhouse-test "
         f"--volume={test_output_root}/test_output_stress_server_log:/var/log/clickhouse-server "
         f"--volume={clickhouse_pre_dataset}:/dataset "
-        "clickhouse/stress-test:latest"
+        "clickhouse-test/stress-test:v701"
     )
     return cmd
 

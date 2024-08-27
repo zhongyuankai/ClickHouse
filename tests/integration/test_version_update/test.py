@@ -11,7 +11,7 @@ node1 = cluster.add_instance("node1", stay_alive=True)
 node2 = cluster.add_instance(
     "node2",
     with_zookeeper=True,
-    image="yandex/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="21.2",
     with_installed_binary=True,
     stay_alive=True,
@@ -22,7 +22,7 @@ node2 = cluster.add_instance(
 # it will be with latest version, but shouldn't, order of tests in CI is shuffled.
 node3 = cluster.add_instance(
     "node3",
-    image="yandex/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="21.5",
     with_installed_binary=True,
     stay_alive=True,
@@ -30,7 +30,7 @@ node3 = cluster.add_instance(
 )
 node4 = cluster.add_instance(
     "node4",
-    image="yandex/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="21.5",
     with_installed_binary=True,
     stay_alive=True,
@@ -38,7 +38,7 @@ node4 = cluster.add_instance(
 )
 node5 = cluster.add_instance(
     "node5",
-    image="yandex/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="21.5",
     with_installed_binary=True,
     stay_alive=True,
@@ -46,7 +46,7 @@ node5 = cluster.add_instance(
 )
 node6 = cluster.add_instance(
     "node6",
-    image="yandex/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="21.5",
     with_installed_binary=True,
     stay_alive=True,

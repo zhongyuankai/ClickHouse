@@ -8,8 +8,8 @@ echo '{
     "ip-forward": true,
     "log-level": "debug",
     "storage-driver": "overlay2",
-    "insecure-registries" : ["dockerhub-proxy.dockerhub-proxy-zone:5000"],
-    "registry-mirrors" : ["http://docker.nju.edu.cn", "http://dockerhub-proxy.dockerhub-proxy-zone:5000"]
+    "insecure-registries" : ["10.85.128.81:30027", "dockerhub-proxy.dockerhub-proxy-zone:5000"],
+    "registry-mirrors" : ["http://10.85.128.81:30027", "http://dockerhub-proxy.dockerhub-proxy-zone:5000"]
 }' | dd of=/etc/docker/daemon.json 2>/dev/null
 
 if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
@@ -63,17 +63,17 @@ export CLICKHOUSE_TESTS_BASE_CONFIG_DIR=/clickhouse-config
 export CLICKHOUSE_ODBC_BRIDGE_BINARY_PATH=/clickhouse-odbc-bridge
 export CLICKHOUSE_LIBRARY_BRIDGE_BINARY_PATH=/clickhouse-library-bridge
 
-export DOCKER_BASE_TAG=${DOCKER_BASE_TAG:=latest}
-export DOCKER_DOTNET_CLIENT_TAG=${DOCKER_DOTNET_CLIENT_TAG:=latest}
-export DOCKER_HELPER_TAG=${DOCKER_HELPER_TAG:=latest}
-export DOCKER_KERBERIZED_HADOOP_TAG=${DOCKER_KERBERIZED_HADOOP_TAG:=latest}
-export DOCKER_KERBEROS_KDC_TAG=${DOCKER_KERBEROS_KDC_TAG:=latest}
-export DOCKER_MYSQL_GOLANG_CLIENT_TAG=${DOCKER_MYSQL_GOLANG_CLIENT_TAG:=latest}
-export DOCKER_MYSQL_JAVA_CLIENT_TAG=${DOCKER_MYSQL_JAVA_CLIENT_TAG:=latest}
-export DOCKER_MYSQL_JS_CLIENT_TAG=${DOCKER_MYSQL_JS_CLIENT_TAG:=latest}
-export DOCKER_MYSQL_PHP_CLIENT_TAG=${DOCKER_MYSQL_PHP_CLIENT_TAG:=latest}
-export DOCKER_NGINX_DAV_TAG=${DOCKER_NGINX_DAV_TAG:=latest}
-export DOCKER_POSTGRESQL_JAVA_CLIENT_TAG=${DOCKER_POSTGRESQL_JAVA_CLIENT_TAG:=latest}
+export DOCKER_BASE_TAG=${DOCKER_BASE_TAG:=v701}
+export DOCKER_DOTNET_CLIENT_TAG=${DOCKER_DOTNET_CLIENT_TAG:=v701}
+export DOCKER_HELPER_TAG=${DOCKER_HELPER_TAG:=v701}
+export DOCKER_KERBERIZED_HADOOP_TAG=${DOCKER_KERBERIZED_HADOOP_TAG:=v701}
+export DOCKER_KERBEROS_KDC_TAG=${DOCKER_KERBEROS_KDC_TAG:=v701}
+export DOCKER_MYSQL_GOLANG_CLIENT_TAG=${DOCKER_MYSQL_GOLANG_CLIENT_TAG:=v701}
+export DOCKER_MYSQL_JAVA_CLIENT_TAG=${DOCKER_MYSQL_JAVA_CLIENT_TAG:=v701}
+export DOCKER_MYSQL_JS_CLIENT_TAG=${DOCKER_MYSQL_JS_CLIENT_TAG:=v701}
+export DOCKER_MYSQL_PHP_CLIENT_TAG=${DOCKER_MYSQL_PHP_CLIENT_TAG:=v701}
+export DOCKER_NGINX_DAV_TAG=${DOCKER_NGINX_DAV_TAG:=v701}
+export DOCKER_POSTGRESQL_JAVA_CLIENT_TAG=${DOCKER_POSTGRESQL_JAVA_CLIENT_TAG:=v701}
 
 cd /ClickHouse/tests/integration
 exec "$@"

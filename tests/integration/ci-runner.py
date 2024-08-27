@@ -286,7 +286,7 @@ class ClickhouseIntegrationTestsRunner:
             "Cannot find image %s in params list %s", name, self.image_versions
         )
         if ":" not in name:
-            return name + ":latest"
+            return name + ":v701"
         return name
 
     def get_image_version(self, name: str):
@@ -295,7 +295,7 @@ class ClickhouseIntegrationTestsRunner:
         logging.warn(
             "Cannot find image %s in params list %s", name, self.image_versions
         )
-        return "latest"
+        return "v701"
 
     def shuffle_test_groups(self):
         return self.shuffle_groups != 0

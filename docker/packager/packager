@@ -10,7 +10,7 @@ from typing import List, Optional
 
 SCRIPT_PATH = Path(__file__).absolute()
 IMAGE_TYPE = "binary"
-IMAGE_NAME = f"clickhouse/{IMAGE_TYPE}-builder"
+IMAGE_NAME = f"clickhouse-test/{IMAGE_TYPE}-builder"
 
 
 class BuildException(Exception):
@@ -446,7 +446,7 @@ def parse_args() -> argparse.Namespace:
         "--with-binaries", choices=("programs", "tests", ""), default=""
     )
     parser.add_argument(
-        "--docker-image-version", default="latest", help="docker image tag to use"
+        "--docker-image-version", default="v701", help="docker image tag to use"
     )
     parser.add_argument(
         "--as-root", action="store_true", help="if the container should run as root"

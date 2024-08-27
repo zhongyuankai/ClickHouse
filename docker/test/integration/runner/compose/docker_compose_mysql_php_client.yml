@@ -1,6 +1,6 @@
 version: '2.3'
 services:
   php1:
-    image: clickhouse/mysql-php-client:${DOCKER_MYSQL_PHP_CLIENT_TAG:-latest}
+    image: clickhouse-test/mysql-php-client:v701
     # to keep container running
     command: sleep infinity
