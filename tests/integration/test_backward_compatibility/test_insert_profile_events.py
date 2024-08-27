@@ -10,7 +10,7 @@ cluster = ClickHouseCluster(__file__)
 upstream_node = cluster.add_instance("upstream_node", allow_analyzer=False)
 old_node = cluster.add_instance(
     "old_node",
-    image="clickhouse/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="22.5.1.2079",
     with_installed_binary=True,
     allow_analyzer=False,

@@ -14,7 +14,7 @@ class DockerImage:
     def __init__(self, name: str, version: Optional[str] = None):
         self.name = name
         if version is None:
-            self.version = "latest"
+            self.version = "v701"
         else:
             self.version = version
 

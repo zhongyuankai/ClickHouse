@@ -359,7 +359,7 @@ node7 = cluster.add_instance(
     "node7",
     user_configs=["configs_old/users.d/not_optimize_count.xml"],
     with_zookeeper=True,
-    image="yandex/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="19.17.8.54",
     stay_alive=True,
     with_installed_binary=True,

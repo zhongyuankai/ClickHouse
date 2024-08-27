@@ -6,7 +6,7 @@ cluster = ClickHouseCluster(__file__)
 # Version 21.6.3.14 has incompatible partition id for tables with UUID in partition key.
 node_22_6 = cluster.add_instance(
     "node_22_6",
-    image="clickhouse/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="22.6",
     stay_alive=True,
     with_installed_binary=True,

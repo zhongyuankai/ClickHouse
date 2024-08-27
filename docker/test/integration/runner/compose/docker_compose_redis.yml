@@ -1,7 +1,7 @@
 version: '2.3'
 services:
     redis1:
-        image: redis
+        image: clickhouse-test/redis:v701
         restart: always
         ports:
             - ${REDIS_EXTERNAL_PORT:-6379}:${REDIS_INTERNAL_PORT:-6379}

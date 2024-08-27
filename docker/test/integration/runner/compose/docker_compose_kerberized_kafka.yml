@@ -2,7 +2,7 @@ version: '2.3'
 
 services:
   kafka_kerberized_zookeeper:
-    image: confluentinc/cp-zookeeper:5.2.0
+    image: clickhouse-test/cp-zookeeper:5.2.0
     # restart: always
     hostname: kafka_kerberized_zookeeper
     environment:
@@ -19,7 +19,7 @@ services:
       - label:disable
 
   kerberized_kafka1:
-    image: confluentinc/cp-kafka:5.2.0
+    image: clickhouse-test/cp-kafka:5.2.0
     # restart: always
     hostname: kerberized_kafka1
     ports:
@@ -52,7 +52,7 @@ services:
       net.ipv4.ip_local_port_range: '55000 65535'
 
   kafka_kerberos:
-    image: clickhouse/kerberos-kdc:${DOCKER_KERBEROS_KDC_TAG:-latest}
+    image: clickhouse-test/kerberos-kdc:v701
     hostname: kafka_kerberos
     volumes:
       - ${KERBERIZED_KAFKA_DIR}/secrets:/tmp/keytab

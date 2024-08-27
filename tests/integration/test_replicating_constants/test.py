@@ -8,7 +8,7 @@ node1 = cluster.add_instance("node1", with_zookeeper=True)
 node2 = cluster.add_instance(
     "node2",
     with_zookeeper=True,
-    image="yandex/clickhouse-server",
+    image="clickhouse-test/clickhouse-server",
     tag="19.1.14",
     with_installed_binary=True,
     allow_analyzer=False,
