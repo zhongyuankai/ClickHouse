@@ -7,6 +7,7 @@
 #include <Processors/Chunk.h>
 #include <Processors/Sources/SourceFromChunks.h>
 #include <QueryPipeline/Pipe.h>
+#include <Disks/DiskLocal.h>
 #include <base/UUID.h>
 
 #include <optional>
@@ -59,7 +60,7 @@ public:
         /// Additional stuff data stored in the key, not hashed:
 
         /// Result metadata for constructing the pipe.
-        const Block header;
+        Block header;
 
         /// The id and current roles of the user who executed the query.
         /// These members are necessary to ensure that a (non-shared, see below) entry can only be written and read by the same user with
@@ -74,24 +75,24 @@ public:
         /// If the associated entry can be read by other users. In general, sharing is a bad idea: First, it is unlikely that different
         /// users pose the same queries. Second, sharing potentially breaches security. E.g. User A should not be able to bypass row
         /// policies on some table by running the same queries as user B for whom no row policies exist.
-        const bool is_shared;
+        bool is_shared;
 
         /// When does the entry expire?
-        const std::chrono::time_point<std::chrono::system_clock> expires_at;
+        std::chrono::time_point<std::chrono::system_clock> expires_at;
 
         /// Are the chunks in the entry compressed?
         /// (we could theoretically apply compression also to the totals and extremes but it's an obscure use case)
-        const bool is_compressed;
+        bool is_compressed;
 
         /// The SELECT query as plain string, displayed in SYSTEM.QUERY_CACHE. Stored explicitly, i.e. not constructed from the AST, for the
         /// sole reason that QueryCache-related SETTINGS are pruned from the AST (see removeQueryCacheSettings()) which will look ugly in
         /// SYSTEM.QUERY_CACHE.
-        const String query_string;
+        String query_string;
 
         /// A tag (namespace) for distinguish multiple entries of the same query.
         /// This member has currently no use besides that SYSTEM.QUERY_CACHE can populate the 'tag' column conveniently without having to
         /// compute the tag from the query AST.
-        const String tag;
+        String tag;
 
         /// Ctor to construct a Key for writing into query cache.
         Key(ASTPtr ast_,
@@ -109,7 +110,22 @@ public:
             const Settings & settings,
             std::optional<UUID> user_id_, const std::vector<UUID> & current_user_roles_);
 
+        Key(IAST::Hash ast_hash_,
+            Block header_,
+            std::optional<UUID> user_id_, const std::vector<UUID> & current_user_roles_,
+            bool is_shared_,
+            std::chrono::time_point<std::chrono::system_clock> expires_at_,
+            bool is_compressed_,
+            String & query_string_);
+
+        Key(IAST::Hash ast_hash_);
+
+        void serialize(WriteBuffer & buf) const;
+        void deserialize(ReadBuffer & buf);
+
         bool operator==(const Key & other) const;
+
+        String getKeyPath() const;
     };
 
     struct Entry
@@ -117,6 +133,12 @@ public:
         Chunks chunks;
         std::optional<Chunk> totals = std::nullopt;
         std::optional<Chunk> extremes = std::nullopt;
+    };
+    using EntryPtr = std::shared_ptr<Entry>;
+
+    struct EntryOnDisk
+    {
+        size_t bytes_on_disk;
     };
 
 private:
@@ -130,13 +152,64 @@ private:
         size_t operator()(const Entry & entry) const;
     };
 
+    struct QueryCacheEntryOnDiskWeight
+    {
+        size_t operator()(const EntryOnDisk & entry) const;
+    };
+
     struct IsStale
     {
         bool operator()(const Key & key) const;
     };
 
-    /// query --> query result
-    using Cache = CacheBase<Key, Entry, KeyHasher, QueryCacheEntryWeight>;
+
+    class Cache
+    {
+        /// query --> query result on memory
+        using CacheOnMemory = CacheBase<Key, Entry, KeyHasher, QueryCacheEntryWeight>;
+
+        /// query --> query result on disk
+        using CacheOnDisk = CacheBase<Key, EntryOnDisk, KeyHasher, QueryCacheEntryOnDiskWeight>;
+
+    public:
+        using MappedPtr = CacheOnMemory::MappedPtr;
+        using KeyMapped = CacheOnMemory::KeyMapped;
+
+        Cache(DiskPtr disk_, const std::optional<std::filesystem::path> & path_);
+
+        size_t sizeInBytes() const;
+        size_t count() const;
+        size_t maxSizeInBytes() const;
+
+        void setMaxCount(size_t max_count);
+        void setMaxSizeInBytes(size_t max_size_in_bytes);
+        void setQuotaForUser(const UUID & user_id, size_t max_size_in_bytes, size_t max_entries);
+
+        std::optional<CacheOnMemory::KeyMapped> getWithKey(const Key &);
+
+        void set(const Key & key, const MappedPtr & mapped);
+
+        void remove(const Key & key);
+        void remove(const String & tag);
+
+        void clear();
+        std::vector<CacheOnMemory::KeyMapped> dump() const;
+
+    private:
+        void loadEntrys();
+
+        // void serializeEntry(const Key & key, MappedPtr mapped) const;
+        // std::pair<Block, MappedPtr> deserializeEntry(const Key & key);
+
+        CacheOnMemory cache_on_memory;
+        CacheOnDisk cache_on_disk;
+        DiskPtr disk;
+        const std::optional<std::filesystem::path> path;
+
+        size_t max_compress_block_size = 1024 * 1024;
+
+        LoggerPtr logger = getLogger("QueryCache");
+    };
 
 public:
     /// Buffers multiple partial query result chunks (buffer()) and eventually stores them as cache entry (finalizeWrite()).

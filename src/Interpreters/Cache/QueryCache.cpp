@@ -1,6 +1,21 @@
 #include "Interpreters/Cache/QueryCache.h"
 
+#include <Common/ProfileEvents.h>
+#include <Common/SipHash.h>
+#include <Common/TTLCachePolicy.h>
+#include <Common/formatReadable.h>
+#include <Common/quoteString.h>
+#include <Core/Settings.h>
+#include <Compression/CompressedWriteBuffer.h>
+#include <Compression/CompressedReadBuffer.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Functions/FunctionFactory.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
+#include <Formats/NativeReader.h>
+#include <Formats/NativeWriter.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InDepthNodeVisitor.h>
@@ -21,6 +36,12 @@
 #include <Core/Settings.h>
 #include <base/defines.h> /// chassert
 
+#include <filesystem>
+
+#include "Formats/NativeWriter.h"
+#include <xpc/xpc.h>
+
+namespace fs = std::filesystem;
 
 namespace ProfileEvents
 {
@@ -223,7 +244,364 @@ String queryStringFromAST(ASTPtr ast)
     return buf.str();
 }
 
+/// Combine N (usually small) chunks to M chunks with max_chunk_size rows each.
+/// The input chunks are non-const to save unnecessary copies for convertToFullIfSparse and convertToFullIfConst.
+Chunks squashChunks(Chunks & chunks, size_t max_chunk_size)
+{
+    Chunks squashed_chunks;
+    size_t rows_remaining_in_squashed = 0; /// how many further rows can the last squashed chunk consume until it reaches max_block_size
+
+    for (auto & chunk : chunks)
+    {
+        convertToFullIfSparse(chunk);
+        convertToFullIfConst(chunk);
+
+        const size_t rows_chunk = chunk.getNumRows();
+        if (rows_chunk == 0)
+            continue;
+
+        size_t rows_chunk_processed = 0;
+        while (true)
+        {
+            if (rows_remaining_in_squashed == 0)
+            {
+                Chunk empty_chunk = Chunk(chunk.cloneEmptyColumns(), 0);
+                squashed_chunks.push_back(std::move(empty_chunk));
+                rows_remaining_in_squashed = max_chunk_size;
+            }
+
+            const size_t rows_to_append = std::min(rows_chunk - rows_chunk_processed, rows_remaining_in_squashed);
+            squashed_chunks.back().append(chunk, rows_chunk_processed, rows_to_append);
+            rows_chunk_processed += rows_to_append;
+            rows_remaining_in_squashed -= rows_to_append;
+
+            if (rows_chunk_processed == rows_chunk)
+                break;
+        }
+    }
+
+    return squashed_chunks;
 }
+
+}
+
+// static constexpr std::string_view format_version_txt = "format_version.txt";
+// static constexpr uint32_t current_version = 1;
+
+static constexpr auto * token_user_id = "user_id: ";
+static constexpr auto * token_current_user_roles = "current_user_roles: ";
+static constexpr auto * token_is_shared = "is_shared: ";
+static constexpr auto * token_expires_at = "expires_at: ";
+static constexpr auto * token_is_compressed = "is_compressed: ";
+static constexpr auto * token_query_string = "query_string: ";
+
+QueryCache::Cache::Cache(DiskPtr disk_, const std::optional<std::filesystem::path> & path_)
+    : cache_on_memory(std::make_unique<TTLCachePolicy<Key, Entry, KeyHasher, QueryCacheEntryWeight, IsStale>>(std::make_unique<PerUserTTLCachePolicyUserQuota>()))
+    , cache_on_disk(std::make_unique<TTLCachePolicy<Key, EntryOnDisk, KeyHasher, QueryCacheEntryOnDiskWeight, IsStale>>(std::make_unique<PerUserTTLCachePolicyUserQuota>()))
+    , disk(disk_)
+    , path(path_)
+{
+}
+
+void QueryCache::Cache::loadEntrys()
+{
+    if (!disk)
+        return;
+
+    std::vector<String> expired_entrys;
+    for (auto it = disk->iterateDirectory(*path); it->isValid(); it->next())
+    {
+        for (auto entry_it = disk->iterateDirectory(it->path()); entry_it->isValid(); entry_it->next())
+        {
+            auto entry_path = fs::path(entry_it->path());
+            try
+            {
+                String ast_hash_str = entry_path.filename();
+                size_t separator_pos = ast_hash_str.find('_');
+                chassert(separator_pos != String::npos);
+                String low64_str = ast_hash_str.substr(0, separator_pos);
+                String high64_str = ast_hash_str.substr(separator_pos + 1, ast_hash_str.size());
+                IAST::Hash ast_hash(std::stoull(low64_str), std::stoull(high64_str));
+
+                Key key(ast_hash);
+                {
+                    auto entry_file = disk->readFile(entry_path / "key_metadata.txt");
+                    key.deserialize(*entry_file);
+
+                    if (key.expires_at < std::chrono::system_clock::now())
+                    {
+                        expired_entrys.push_back(entry_path);
+                        continue;
+                    }
+                }
+
+                /// When the EntryOnDisk is released, the disk file is also deleted.
+                auto entry_on_disk = std::shared_ptr<EntryOnDisk>(
+                    new EntryOnDisk,
+                    [this, entry_path](EntryOnDisk * e)
+                    {
+                        try
+                        {
+                            disk->removeRecursive(*path / entry_path);
+                        }
+                        catch (...)
+                        {
+                        }
+                        delete e;
+                    });
+
+                auto [header, entry] = deserializeEntry(key);
+                key.header = header;
+
+                cache_on_memory.set(key, entry);
+
+                entry_on_disk->results_bytes = entry->chunks.back().allocatedBytes();
+                entry_on_disk->totals_bytes = entry->totals.has_value() ? entry->totals->allocatedBytes() : 0;
+                entry_on_disk->extremes_bytes = entry->extremes.has_value() ? entry->extremes->allocatedBytes() : 0;
+
+                cache_on_disk.set(key, entry_on_disk);
+            }
+            catch (...)
+            {
+                expired_entrys.push_back(entry_path);
+            }
+        }
+    }
+
+    for (const auto & entry_path : expired_entrys)
+        disk->removeRecursive(*path / entry_path);
+
+    size_t count = cache_on_disk.count();
+    LOG_TRACE(logger, "Loading {} entries from disk, {} succeeded and {} failed.", count + expired_entrys.size(), count, expired_entrys.size());
+}
+
+
+void QueryCache::Cache::set(const Key & key, const MappedPtr & mapped)
+{
+    cache_on_memory.set(key, mapped);
+
+    if (!disk)
+        return;
+
+    auto entry_path = fs::path(*path) / key.getKeyPath();
+    auto entry_on_disk = std::shared_ptr<EntryOnDisk>(
+        new EntryOnDisk,
+        [this, entry_path](EntryOnDisk * e)
+        {
+            try
+            {
+                disk->removeRecursive(*path / entry_path);
+            }
+            catch (...)
+            {
+            }
+        delete e;
+    });
+    disk->createDirectories(entry_path);
+
+    {
+        auto entry_file = disk->writeFile(entry_path / "key_metadata.txt");
+        key.serialize(*entry_file);
+    }
+
+    serializeEntry(key, mapped);
+    cache_on_disk.set(key, entry_on_disk);
+}
+
+std::optional<QueryCache::Cache::KeyMapped> QueryCache::Cache::getWithKey(const Key & key)
+{
+    auto memory_res = cache_on_memory.getWithKey(key);
+    if (memory_res && !disk)
+        return memory_res;
+
+    if (auto disk_res = cache_on_disk.getWithKey(key); !disk_res.has_value() || IsStale()(disk_res->key))
+        return std::nullopt;
+
+    try
+    {
+        auto [hader, entry] = deserializeEntry(key);
+        cache_on_memory.set(key, entry);
+        return KeyMapped{key, entry};
+    }
+    catch (...)
+    {
+    }
+    return std::nullopt;
+}
+
+void QueryCache::Cache::serializeEntry(const Key & key, MappedPtr mapped) const
+{
+    auto entry_path = *path / key.getKeyPath();
+    auto writeChunk = [](const Chunk & chunk, NativeWriter & writer)
+    {
+        Block block = writer.getHeader();
+        const Columns & columns = chunk.getColumns();
+        for (size_t i = 0; i < block.columns(); ++i)
+        {
+            auto column = block.getByPosition(i);
+            column.column = columns[i];
+            block.insert(column);
+        }
+
+        writer.write(block);
+    };
+
+    {
+        auto out = disk->writeFile(entry_path / "results.bin");
+        auto compress_out = std::make_unique<CompressedWriteBuffer>(*out, CompressionCodecFactory::instance().getDefaultCodec(), max_compress_block_size);
+        NativeWriter writer(*compress_out, 0, key.header);
+
+        for (const auto & chunk : mapped->chunks)
+            writeChunk(chunk, writer);
+    }
+
+    if (mapped->totals.has_value())
+    {
+        auto out = disk->writeFile(entry_path / "totals.bin");
+        auto compress_out = std::make_unique<CompressedWriteBuffer>(*out, CompressionCodecFactory::instance().getDefaultCodec(), max_compress_block_size);
+        NativeWriter writer(*compress_out, 0, key.header);
+        writeChunk(*mapped->totals, writer);
+    }
+
+    if (mapped->extremes.has_value())
+    {
+        auto out = disk->writeFile(entry_path / "extremes.bin");
+        auto compress_out = std::make_unique<CompressedWriteBuffer>(*out, CompressionCodecFactory::instance().getDefaultCodec(), max_compress_block_size);
+        NativeWriter writer(*compress_out, 0, key.header);
+        writeChunk(*mapped->extremes, writer);
+    }
+}
+
+
+std::pair<Block, QueryCache::Cache::MappedPtr> QueryCache::Cache::deserializeEntry(const Key & key)
+{
+    try
+    {
+        auto entry = std::make_shared<Entry>();
+        std::optional<Block> header;
+        auto key_path = *path / key.getKeyPath();
+        {
+            auto in = disk->readFile(key_path / "results.bin");
+            auto compress_in = std::make_shared<CompressedReadBuffer>(*in);
+            NativeReader reader(*compress_in, 0);
+
+            while (!compress_in->eof())
+            {
+                Block res = reader.read();
+                entry->chunks.emplace_back(res.getColumns(), res.rows());
+
+                if (!header)
+                    header = res.cloneEmpty();
+            }
+        }
+
+        if (disk->exists(key_path / "totals.bin"))
+        {
+            auto in = disk->readFile(key_path / "totals.bin");
+            auto compress_in = std::make_shared<CompressedReadBuffer>(*in);
+            NativeReader reader(*compress_in, 0);
+            Block res = reader.read();
+
+            entry->totals.emplace(res.getColumns(), res.rows());
+        }
+
+        if (disk->exists(key_path / "extremes.bin"))
+        {
+            auto in = disk->readFile(key_path / "extremes.bin");
+            auto compress_in = std::make_shared<CompressedReadBuffer>(*in);
+            NativeReader reader(*compress_in, 0);
+            Block res = reader.read();
+
+            entry->extremes.emplace(res.getColumns(), res.rows());
+        }
+
+        return std::make_pair(*header, entry);
+    }
+    catch (...)
+    {
+    }
+}
+
+
+size_t QueryCache::Cache::maxSizeInBytes() const
+{
+    return std::max(cache_on_memory.maxSizeInBytes(), cache_on_disk.maxSizeInBytes());
+}
+
+size_t QueryCache::Cache::sizeInBytes() const
+{
+    return std::max(cache_on_memory.sizeInBytes(), cache_on_disk.sizeInBytes());
+}
+
+size_t QueryCache::Cache::count() const
+{
+    return std::max(cache_on_memory.count(), cache_on_disk.count());
+}
+
+void QueryCache::Cache::setMaxCount(size_t max_count)
+{
+    cache_on_memory.setMaxCount(max_count);
+}
+
+void QueryCache::Cache::setQuotaForUser(const UUID & user_id, size_t max_size_in_bytes, size_t max_entries)
+{
+    cache_on_memory.setQuotaForUser(user_id, max_size_in_bytes, max_entries);
+}
+
+void QueryCache::Cache::setMaxSizeInBytes(size_t max_size_in_bytes)
+{
+    cache_on_memory.setMaxSizeInBytes(max_size_in_bytes);
+}
+
+void QueryCache::Cache::remove(const Key & key)
+{
+    cache_on_memory.remove(key);
+    cache_on_disk.remove(key);
+}
+
+void QueryCache::Cache::remove(const String & tag)
+{
+    auto predicate1 = [tag](const Key & key, const CacheOnMemory::MappedPtr &) { return key.tag == tag; };
+    cache_on_memory.remove(predicate1);
+
+    auto predicate2 = [tag](const Key & key, const CacheOnDisk::MappedPtr &) { return key.tag == tag; };
+    cache_on_disk.remove(predicate2);
+}
+
+void QueryCache::Cache::clear()
+{
+    cache_on_memory.clear();
+    cache_on_disk.clear();
+}
+
+std::vector<CacheBase<QueryCache::Key, QueryCache::Entry, QueryCache::KeyHasher, QueryCache::QueryCacheEntryWeight>::KeyMapped> QueryCache::Cache::dump() const
+{
+    return cache_on_memory.dump();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 QueryCache::Key::Key(
     ASTPtr ast_,
@@ -257,9 +635,114 @@ QueryCache::Key::Key(
 {
 }
 
+QueryCache::Key::Key(
+    IAST::Hash ast_hash_,
+    Block header_,
+    std::optional<UUID> user_id_, const std::vector<UUID> & current_user_roles_,
+    bool is_shared_,
+    std::chrono::time_point<std::chrono::system_clock> expires_at_,
+    bool is_compressed_,
+    String & query_string_)
+    : ast_hash(ast_hash_)
+    , header(header_)
+    , user_id(user_id_)
+    , current_user_roles(current_user_roles_)
+    , is_shared(is_shared_)
+    , expires_at(expires_at_)
+    , is_compressed(is_compressed_)
+    , query_string(query_string_)
+{
+}
+
+QueryCache::Key::Key(IAST::Hash ast_hash_)
+    : ast_hash(ast_hash_)
+{
+}
+
+void QueryCache::Key::serialize(WriteBuffer & buf) const
+{
+    writeText(token_user_id, buf);
+    UUID user_id_ = user_id ? *user_id : UUIDHelpers::Nil;
+    writeUUIDText(user_id_, buf);
+    writeText("\n", buf);
+
+    writeText(token_current_user_roles, buf);
+    for (size_t i = 0; i < current_user_roles.size(); ++i)
+    {
+        writeUUIDText(current_user_roles[i], buf);
+        if (i != current_user_roles.size() - 1)
+            writeText(",", buf);
+    }
+    writeText("\n", buf);
+
+    writeText(token_is_shared, buf);
+    writeBoolText(is_shared, buf);
+    writeText("\n", buf);
+
+    writeText(token_expires_at, buf);
+    writeVarUInt(std::chrono::system_clock::to_time_t(expires_at), buf);
+    writeText("\n", buf);
+
+    writeText(token_is_compressed, buf);
+    writeBoolText(is_compressed, buf);
+    writeText("\n", buf);
+
+    writeText(token_query_string, buf);
+    writeText(query_string, buf);
+    writeText("\n", buf);
+}
+
+void QueryCache::Key::deserialize(ReadBuffer & buf)
+{
+    assertString(token_user_id, buf);
+    UUID user_id_;
+    readUUIDText(user_id_, buf);
+    if (user_id_ != UUIDHelpers::Nil)
+        user_id = user_id_;
+
+    assertString(token_current_user_roles, buf);
+    std::vector<UUID> current_user_roles_;
+    while (!checkChar('\n', buf))
+    {
+        UUID user_role;
+        readUUIDText(user_role, buf);
+        current_user_roles_.push_back(user_role);
+        assertChar(',', buf);
+    }
+    assertChar('\n', buf);
+    if (!current_user_roles_.empty())
+        current_user_roles = current_user_roles_;
+
+    assertString(token_is_shared, buf);
+    readBoolText(is_shared, buf);
+    assertChar('\n', buf);
+
+    assertString(token_expires_at, buf);
+    std::time_t timestamp;
+    readVarUInt(timestamp, buf);
+    expires_at = std::chrono::system_clock::from_time_t(timestamp);
+    assertChar('\n', buf);
+
+    assertString(token_is_compressed, buf);
+    readBoolText(is_compressed, buf);
+    assertChar('\n', buf);
+
+    assertString(token_query_string, buf);
+    readStringUntilNewlineInto(query_string, buf);
+}
+
+
+
+
 bool QueryCache::Key::operator==(const Key & other) const
 {
     return ast_hash == other.ast_hash;
+}
+
+String QueryCache::Key::getKeyPath() const
+{
+    String ast_hash_str = std::to_string(ast_hash.low64) + '_' + std::to_string(ast_hash.high64);
+    return fs::path(ast_hash_str.substr(0, 3)) / ast_hash_str;
 }
 
 size_t QueryCache::KeyHasher::operator()(const Key & key) const
@@ -274,6 +757,14 @@ size_t QueryCache::QueryCacheEntryWeight::operator()(const Entry & entry) const
         res += chunk.allocatedBytes();
     res += entry.totals.has_value() ? entry.totals->allocatedBytes() : 0;
     res += entry.extremes.has_value() ? entry.extremes->allocatedBytes() : 0;
+    return res;
+}
+
+size_t QueryCache::QueryCacheEntryOnDiskWeight::operator()(const EntryOnDisk & entry) const
+{
+    size_t res = entry.results_bytes;
+    res += entry.totals_bytes;
+    res += entry.extremes_bytes;
     return res;
 }
 
@@ -586,7 +1077,7 @@ std::unique_ptr<SourceFromChunks> QueryCache::Reader::getSourceExtremes()
 }
 
 QueryCache::QueryCache(size_t max_size_in_bytes, size_t max_entries, size_t max_entry_size_in_bytes_, size_t max_entry_size_in_rows_)
-    : cache(std::make_unique<TTLCachePolicy<Key, Entry, KeyHasher, QueryCacheEntryWeight, IsStale>>(std::make_unique<PerUserTTLCachePolicyUserQuota>()))
+    : cache(nullptr, {})
 {
     updateConfiguration(max_size_in_bytes, max_entries, max_entry_size_in_bytes_, max_entry_size_in_rows_);
 }
@@ -623,8 +1114,7 @@ void QueryCache::clear(const std::optional<String> & tag)
 {
     if (tag)
     {
-        auto predicate = [tag](const Key & key, const Cache::MappedPtr &) { return key.tag == tag.value(); };
-        cache.remove(predicate);
+        cache.remove(*tag);
     }
     else
     {
