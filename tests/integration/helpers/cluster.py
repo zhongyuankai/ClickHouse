@@ -1992,6 +1992,11 @@ class ClickHouseCluster:
         container_id = self.get_container_id(instance_name)
         return self.docker_client.api.logs(container_id).decode()
 
+    def query_zookeeper(self, query, node="zoo1", nothrow=False):
+        cmd = f'clickhouse keeper-client -p {self.zookeeper_port} -q "{query}"'
+        container_id = self.get_container_id(node)
+        return self.exec_in_container(container_id, cmd, nothrow=nothrow, use_cli=False)
+
     def exec_in_container(
         self, container_id, cmd, detach=False, nothrow=False, use_cli=True, **kwargs
     ):
