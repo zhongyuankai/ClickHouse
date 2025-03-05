@@ -91,6 +91,9 @@ public:
         ColumnPtr column;
 
         void toTree(JSONBuilder::JSONMap & map) const;
+        size_t getHash() const;
+    private:
+        void updateHash(SipHash & hash_state) const;
     };
 
     /// NOTE: std::list is an implementation detail.

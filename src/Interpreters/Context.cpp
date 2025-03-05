@@ -35,6 +35,7 @@
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Interpreters/Cache/QueryCache.h>
+#include <Interpreters/Cache/QueryConditionCache.h>
 #include <Interpreters/Cache/FileCacheFactory.h>
 #include <Interpreters/SessionTracker.h>
 #include <Core/ServerSettings.h>
@@ -258,6 +259,7 @@ struct ContextSharedPart : boost::noncopyable
     mutable std::unique_ptr<ThreadPool> prefetch_threadpool;    /// Threadpool for loading marks cache.
     mutable UncompressedCachePtr index_uncompressed_cache;      /// The cache of decompressed blocks for MergeTree indices.
     mutable QueryCachePtr query_cache;                          /// Cache of query results.
+    mutable QueryConditionCachePtr query_condition_cache;       /// Cache of matching marks for predicates.
     mutable MarkCachePtr index_mark_cache;                      /// Cache of marks in compressed files of MergeTree indices.
     mutable MMappedFileCachePtr mmap_cache;                     /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list;                                   /// Executing queries at the moment.
@@ -2504,6 +2506,41 @@ void Context::clearQueryCache() const
         shared->query_cache->clear();
 }
 
+void Context::setQueryConditionCache(const String & cache_policy, size_t max_size_in_bytes, double size_ratio)
+{
+    auto lock = getLock();
+
+    if (shared->query_condition_cache)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mark filter cache has been already create.");
+
+    shared->query_condition_cache = std::make_shared<QueryConditionCache>(cache_policy, max_size_in_bytes, size_ratio);
+}
+
+QueryConditionCachePtr Context::getQueryConditionCache() const
+{
+    auto lock = getLock();
+    return shared->query_condition_cache;
+}
+
+void Context::updateQueryConditionCacheConfiguration(const Poco::Util::AbstractConfiguration & config)
+{
+    auto lock = getLock();
+
+    if (!shared->query_condition_cache)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query condition cache was not created yet.");
+
+    size_t max_size_in_bytes = config.getUInt64("query_condition_cache_size", DEFAULT_QUERY_CONDITION_CACHE_MAX_SIZE);
+    shared->query_condition_cache->setMaxSizeInBytes(max_size_in_bytes);
+}
+
+void Context::clearQueryConditionCache() const
+{
+    auto lock = getLock();
+
+    if (shared->query_condition_cache)
+        shared->query_condition_cache->clear();
+}
+
 void Context::clearCaches() const
 {
     auto lock = getLock();
@@ -2529,6 +2566,10 @@ void Context::clearCaches() const
     shared->mmap_cache->clear();
 
     /// Intentionally not clearing the query cache which is transactionally inconsistent by design.
+
+    if (!shared->query_condition_cache)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query condition cache was not created yet.");
+    shared->query_condition_cache->clear();
 }
 
 ThreadPool & Context::getPrefetchThreadpool() const

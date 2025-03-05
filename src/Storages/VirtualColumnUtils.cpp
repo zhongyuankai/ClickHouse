@@ -38,6 +38,7 @@
 #include <Parsers/makeASTForLogicalFunction.h>
 #include <Columns/ColumnSet.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
 #include <Interpreters/ActionsVisitor.h>
 
 
@@ -398,6 +399,23 @@ void addRequestedPathAndFileVirtualsToChunk(
             }
         }
     }
+}
+
+bool isDeterministic(const ActionsDAG::Node * node)
+{
+    for (const auto * child : node->children)
+    {
+        if (!isDeterministic(child))
+            return false;
+    }
+
+    if (node->type != ActionsDAG::ActionType::FUNCTION)
+        return true;
+
+    if (!node->function_base->isDeterministic())
+        return false;
+
+    return true;
 }
 
 }

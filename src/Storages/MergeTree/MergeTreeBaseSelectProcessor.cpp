@@ -13,6 +13,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <Interpreters/Cache/QueryConditionCache.h>
 #include <city.h>
 
 namespace ProfileEvents
@@ -149,8 +150,31 @@ ChunkAndProgress IMergeTreeSelectAlgorithm::read()
     {
         try
         {
-            if ((!task || task->isFinished()) && !getNewTask())
-                break;
+            if (!task || task->isFinished())
+            {
+                if (task && prewhere_info && reader_settings.use_query_condition_cache)
+                {
+                    for (const auto * dag : prewhere_info->prewhere_actions->getOutputs())
+                    {
+                        if (dag->result_name == prewhere_info->prewhere_column_name)
+                        {
+                            auto data_part = task->data_part;
+                            auto storage_id = data_part->storage.getStorageID();
+                            auto query_condition_cache = Context::getGlobalContextInstance()->getQueryConditionCache();
+                            query_condition_cache->write(storage_id.uuid,
+                                data_part->name,
+                                dag->getHash(),
+                                task->getPrewhereUnmatchedMarks(),
+                                data_part->index_granularity.getMarksCount(),
+                                data_part->index_granularity.hasFinalMark());
+                            break;
+                        }
+                    }
+                }
+
+                if (!getNewTask())
+                    break;
+            }
         }
         catch (const Exception & e)
         {
@@ -175,14 +199,30 @@ ChunkAndProgress IMergeTreeSelectAlgorithm::read()
                 ordered_columns.push_back(res.block.getByName(name).column);
             }
 
+            auto chunk = Chunk(ordered_columns, res.row_count);
+            if (reader_settings.use_query_condition_cache)
+            {
+                auto & data_part = task->data_part;
+                chunk.setChunkInfo(
+                    std::make_shared<MarkRangesInfo>(
+                        data_part->storage.getStorageID().uuid,
+                        data_part->name,
+                        data_part->index_granularity.getMarksCount(),
+                        data_part->index_granularity.hasFinalMark(),
+                        res.read_mark_ranges));
+            }
+
             return ChunkAndProgress{
-                .chunk = Chunk(ordered_columns, res.row_count),
+                .chunk = std::move(chunk),
                 .num_read_rows = res.num_read_rows,
                 .num_read_bytes = res.num_read_bytes,
                 .is_finished = false};
         }
         else
         {
+            if (reader_settings.use_query_condition_cache && prewhere_info)
+                task->addPrewhereUnmatchedMarks(res.read_mark_ranges);
+
             return {Chunk(), res.num_read_rows, res.num_read_bytes, false};
         }
     }
@@ -446,6 +486,7 @@ IMergeTreeSelectAlgorithm::BlockAndProgress IMergeTreeSelectAlgorithm::readFromP
 
         BlockAndProgress res = {
             .block = std::move(block),
+            .read_mark_ranges = read_result.read_mark_ranges,
             .row_count = read_result.num_rows,
             .num_read_rows = num_read_rows,
             .num_read_bytes = num_read_bytes };
@@ -458,7 +499,7 @@ IMergeTreeSelectAlgorithm::BlockAndProgress IMergeTreeSelectAlgorithm::readFromP
         {
             LOG_TRACE(log, "Skip read broken part {}, error: {}", task->data_part->name, getCurrentExceptionMessage(false));
             task->finish();
-            return {{}, 0, 0, 0};
+            return {{}, {}, 0, 0, 0};
         }
         throw;
     }

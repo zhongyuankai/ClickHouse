@@ -5,6 +5,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/TreeRewriter.h>
+#include <Interpreters/Cache/QueryConditionCache.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -119,6 +120,7 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(
         .use_asynchronous_read_from_pool = settings.allow_asynchronous_read_from_io_pool_for_merge_tree
             && (settings.max_streams_to_max_threads_ratio > 1 || settings.max_streams_for_merge_tree_reading > 1),
         .enable_multiple_prewhere_read_steps = settings.enable_multiple_prewhere_read_steps,
+        .use_query_condition_cache = settings.use_query_condition_cache,
     };
 }
 
@@ -1348,7 +1350,10 @@ static void buildIndexes(
 void ReadFromMergeTree::applyFilters()
 {
     auto filter_actions_dag = buildFilterDAG(context, prewhere_info, filter_nodes, query_info);
-    buildIndexes(indexes, filter_actions_dag, data, context, query_info, metadata_for_reading);
+    if (filter_actions_dag)
+        query_info.filter_actions_dag = filter_actions_dag;
+
+    buildIndexes(indexes, query_info.filter_actions_dag, data, context, query_info, metadata_for_reading);
 }
 
 MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
@@ -1509,6 +1514,9 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToReadImpl(
             num_streams,
             result.index_stats,
             indexes->use_skip_indexes);
+
+        MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(result.parts_with_ranges, query_info, context, log);
+
     }
     catch (...)
     {
@@ -1838,6 +1846,10 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     ProfileEvents::increment(ProfileEvents::SelectedMarks, result.selected_marks);
 
     auto query_id_holder = MergeTreeDataSelectExecutor::checkLimits(data, result, context);
+
+    /// If we have neither a WHERE nor a PREWHERE condition, the query condition cache doesn't save anything --> disable it.
+    if (reader_settings.use_query_condition_cache && !query_info.prewhere_info && !query_info.filter_actions_dag)
+        reader_settings.use_query_condition_cache = false;
 
     if (result.parts_with_ranges.empty())
     {

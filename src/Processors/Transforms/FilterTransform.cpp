@@ -1,10 +1,16 @@
 #include <Processors/Transforms/FilterTransform.h>
 
+#include <Interpreters/Context.h>
+#include <Interpreters/Cache/QueryConditionCache.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Columns/ColumnsCommon.h>
 #include <Core/Field.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <Processors/IProcessor.h>
+#include <Processors/Chunk.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -63,7 +69,8 @@ FilterTransform::FilterTransform(
     String filter_column_name_,
     bool remove_filter_column_,
     bool on_totals_,
-    std::shared_ptr<std::atomic<size_t>> rows_filtered_)
+    std::shared_ptr<std::atomic<size_t>> rows_filtered_,
+    std::optional<size_t> condition_hash_)
     : ISimpleTransform(
             header_,
             transformHeader(header_, expression_ ? &expression_->getActionsDAG() : nullptr, filter_column_name_, remove_filter_column_),
@@ -73,6 +80,8 @@ FilterTransform::FilterTransform(
     , remove_filter_column(remove_filter_column_)
     , on_totals(on_totals_)
     , rows_filtered(rows_filtered_)
+    , condition_hash(condition_hash_)
+
 {
     transformed_header = getInputPort().getHeader();
     if (expression)
@@ -82,6 +91,9 @@ FilterTransform::FilterTransform(
     auto & column = transformed_header.getByPosition(filter_column_position).column;
     if (column)
         constant_filter_description = ConstantFilterDescription(*column);
+
+    if (condition_hash.has_value())
+        query_condition_cache = Context::getGlobalContextInstance()->getQueryConditionCache();
 }
 
 IProcessor::Status FilterTransform::prepare()
@@ -103,6 +115,9 @@ IProcessor::Status FilterTransform::prepare()
     /// Until prepared sets are initialized, output port will be unneeded, and prepare will return PortFull.
     if (status != IProcessor::Status::PortFull)
         are_prepared_sets_initialized = true;
+
+    if (status == IProcessor::Status::Finished)
+        writeIntoQueryConditionCache({});
 
     return status;
 }
@@ -155,7 +170,10 @@ void FilterTransform::doTransform(Chunk & chunk)
     constant_filter_description = ConstantFilterDescription(*filter_column);
 
     if (constant_filter_description.always_false)
+    {
+        writeIntoQueryConditionCache(chunk.getChunkInfo());
         return; /// Will finish at next prepare call
+    }
 
     if (constant_filter_description.always_true)
     {
@@ -195,8 +213,11 @@ void FilterTransform::doTransform(Chunk & chunk)
 
     /// If the current block is completely filtered out, let's move on to the next one.
     if (num_filtered_rows == 0)
+    {
+        writeIntoQueryConditionCache(chunk.getChunkInfo());
         /// SimpleTransform will skip it.
         return;
+    }
 
     /// If all the rows pass through the filter.
     if (num_filtered_rows == num_rows_before_filtration)
@@ -244,5 +265,65 @@ void FilterTransform::doTransform(Chunk & chunk)
     removeFilterIfNeed(chunk);
 }
 
+void FilterTransform::writeIntoQueryConditionCache(const ChunkInfoPtr & chunk_info)
+{
+    if (!query_condition_cache)
+        return;
+
+    const MarkRangesInfo * mark_info = nullptr;
+    if (chunk_info)
+        mark_info = typeid_cast<const MarkRangesInfo *>(chunk_info.get());
+
+    if (!mark_info)
+    {
+        if (!merged_mark_info)
+            return;
+
+        query_condition_cache->write(
+            merged_mark_info->table_uuid,
+            merged_mark_info->part_name,
+            *condition_hash,
+            merged_mark_info->mark_ranges,
+            merged_mark_info->marks_count,
+            merged_mark_info->has_final_mark);
+        merged_mark_info = nullptr;
+        return;
+    }
+
+    if (!merged_mark_info)
+    {
+        merged_mark_info = std::make_shared<MarkRangesInfo>(
+            mark_info->table_uuid,
+            mark_info->part_name,
+            mark_info->marks_count,
+            mark_info->has_final_mark,
+            mark_info->mark_ranges);
+    }
+    else
+    {
+        /// If it is the same part, merge the mark ranges, otherwise update to the query condition cache.
+        if (merged_mark_info->table_uuid != mark_info->table_uuid || merged_mark_info->part_name != mark_info->part_name)
+        {
+            query_condition_cache->write(
+                merged_mark_info->table_uuid,
+                merged_mark_info->part_name,
+                *condition_hash,
+                merged_mark_info->mark_ranges,
+                merged_mark_info->marks_count,
+                merged_mark_info->has_final_mark);
+
+            merged_mark_info = std::make_shared<MarkRangesInfo>(
+                mark_info->table_uuid,
+                mark_info->part_name,
+                mark_info->marks_count,
+                mark_info->has_final_mark,
+                mark_info->mark_ranges);
+        }
+        else
+        {
+            merged_mark_info->addMarkRanges(mark_info->mark_ranges);
+        }
+    }
+}
 
 }

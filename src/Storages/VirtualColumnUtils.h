@@ -69,6 +69,9 @@ void filterByPathOrFile(std::vector<T> & sources, const std::vector<String> & pa
 
 void addRequestedPathAndFileVirtualsToChunk(
     Chunk & chunk, const NamesAndTypesList & requested_virtual_columns, const String & path, const String * filename = nullptr);
+
+/// Checks if all functions used in DAG are deterministic.
+bool isDeterministic(const ActionsDAG::Node * node);
 }
 
 }

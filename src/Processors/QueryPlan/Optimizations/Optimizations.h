@@ -114,6 +114,7 @@ void optimizeAggregationInOrder(QueryPlan::Node & node, QueryPlan::Nodes &);
 bool optimizeUseAggregateProjections(QueryPlan::Node & node, QueryPlan::Nodes & nodes, bool allow_implicit_projections);
 bool optimizeUseNormalProjections(Stack & stack, QueryPlan::Nodes & nodes);
 bool addPlansForSets(QueryPlan & plan, QueryPlan::Node & node, QueryPlan::Nodes & nodes);
+void updateQueryConditionCache(const Stack & stack, const QueryPlanOptimizationSettings & optimization_settings);
 
 /// Enable memory bound merging of aggregation states for remote queries
 /// in case it was enabled for local plan

@@ -118,6 +118,8 @@ void optimizeTreeSecondPass(const QueryPlanOptimizationSettings & optimization_s
         optimizePrewhere(stack, nodes);
         optimizePrimaryKeyCondition(stack);
 
+        updateQueryConditionCache(stack, optimization_settings);
+
         {
             /// NOTE: frame cannot be safely used after stack was modified.
             auto & frame = stack.back();
@@ -198,11 +200,6 @@ void optimizeTreeThirdPass(QueryPlan & plan, QueryPlan::Node & root, QueryPlan::
             ++frame.next_child;
             stack.push_back(next_frame);
             continue;
-        }
-
-        if (auto * source_step_with_filter = dynamic_cast<SourceStepWithFilter *>(frame.node->step.get()))
-        {
-            source_step_with_filter->applyFilters();
         }
 
         addPlansForSets(plan, *frame.node, nodes);

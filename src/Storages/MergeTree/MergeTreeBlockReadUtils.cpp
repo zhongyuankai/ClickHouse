@@ -179,6 +179,11 @@ void MergeTreeReadTask::finish()
     range_reader.finish();
 }
 
+void MergeTreeReadTask::addPrewhereUnmatchedMarks(MarkRanges & mark_ranges_)
+{
+    prewhere_unmatched_marks.insert(prewhere_unmatched_marks.end(), mark_ranges_.begin(), mark_ranges_.end());
+}
+
 MergeTreeBlockSizePredictor::MergeTreeBlockSizePredictor(
     const DataPartPtr & data_part_, const Names & columns, const Block & sample_block)
     : data_part(data_part_)

@@ -45,6 +45,7 @@
 #include <Interpreters/TransactionLog.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/Cache/QueryConditionCache.h>
 #include <IO/S3Common.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>

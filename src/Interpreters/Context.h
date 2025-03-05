@@ -86,6 +86,7 @@ struct Progress;
 struct FileProgress;
 class Clusters;
 class QueryCache;
+class QueryConditionCache;
 class ISystemLog;
 class QueryLog;
 class QueryThreadLog;
@@ -952,6 +953,11 @@ public:
     void updateQueryCacheConfiguration(const Poco::Util::AbstractConfiguration & config);
     std::shared_ptr<QueryCache> getQueryCache() const;
     void clearQueryCache() const;
+
+    void setQueryConditionCache(const String & cache_policy, size_t max_size_in_bytes, double size_ratio);
+    void updateQueryConditionCacheConfiguration(const Poco::Util::AbstractConfiguration & config);
+    std::shared_ptr<QueryConditionCache> getQueryConditionCache() const;
+    void clearQueryConditionCache() const;
 
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.

@@ -1190,6 +1190,16 @@ try
     }
     global_context->setQueryCache(query_cache_max_size_in_bytes, query_cache_max_entries, query_cache_query_cache_max_entry_size_in_bytes, query_cache_max_entry_size_in_rows);
 
+    String query_condition_cache_policy = config().getString("query_condition_cache_policy", DEFAULT_QUERY_CONDITION_CACHE_POLICY);
+    size_t query_condition_cache_size = config().getUInt64("query_condition_cache_size", DEFAULT_QUERY_CONDITION_CACHE_MAX_SIZE);
+    double query_condition_cache_size_ratio = config().getDouble("query_condition_cache_size", DEFAULT_QUERY_CONDITION_CACHE_SIZE_RATIO);
+    if (query_condition_cache_size > max_cache_size)
+    {
+        query_condition_cache_size = max_cache_size;
+        LOG_INFO(log, "Lowered query condition cache size to {} because the system has limited RAM", formatReadableSizeWithBinarySuffix(query_condition_cache_size));
+    }
+    global_context->setQueryConditionCache(query_condition_cache_policy, query_condition_cache_size, query_condition_cache_size_ratio);
+
 #if USE_EMBEDDED_COMPILER
     size_t compiled_expression_cache_max_size_in_bytes = config().getUInt64("compiled_expression_cache_size", DEFAULT_COMPILED_EXPRESSION_CACHE_MAX_SIZE);
     size_t compiled_expression_cache_max_elements = config().getUInt64("compiled_expression_cache_elements_size", DEFAULT_COMPILED_EXPRESSION_CACHE_MAX_ENTRIES);
@@ -1422,6 +1432,8 @@ try
             global_context->updateIndexMarkCacheConfiguration(*config);
             global_context->updateMMappedFileCacheConfiguration(*config);
             global_context->updateQueryCacheConfiguration(*config);
+            global_context->updateQueryConditionCacheConfiguration(*config);
+
 
             CompressionCodecEncrypted::Configuration::instance().tryLoad(*config, "encryption_codecs");
 #if USE_SSL

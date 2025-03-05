@@ -59,7 +59,7 @@ void FilterStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQ
     pipeline.addSimpleTransform([&](const Block & header, QueryPipelineBuilder::StreamType stream_type)
     {
         bool on_totals = stream_type == QueryPipelineBuilder::StreamType::Totals;
-        return std::make_shared<FilterTransform>(header, expression, filter_column_name, remove_filter_column, on_totals);
+        return std::make_shared<FilterTransform>(header, expression, filter_column_name, remove_filter_column, on_totals, nullptr, condition_hash);
     });
 
     if (!blocksHaveEqualStructure(pipeline.getHeader(), output_stream->header))
@@ -97,6 +97,11 @@ void FilterStep::describeActions(JSONBuilder::JSONMap & map) const
 
     auto expression = std::make_shared<ExpressionActions>(actions_dag);
     map.add("Expression", expression->toTree());
+}
+
+void FilterStep::setQueryConditionHash(size_t condition_hash_)
+{
+    condition_hash = condition_hash_;
 }
 
 void FilterStep::updateOutputStream()

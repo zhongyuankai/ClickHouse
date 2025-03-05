@@ -68,6 +68,8 @@ struct MergeTreeReadTask
     /// Range readers for multiple filtering steps: row level security, PREWHERE etc.
     /// NOTE: we take references to elements and push_back new elements, that's why it is a deque but not a vector
     std::deque<MergeTreeRangeReader> pre_range_readers;
+    /// There is no mark matching a row of data under the prewhere condition.
+    MarkRanges prewhere_unmatched_marks;
 
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;
     std::future<MergeTreeReaderPtr> reader;
@@ -78,6 +80,9 @@ struct MergeTreeReadTask
     bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
 
     void finish();
+
+    void addPrewhereUnmatchedMarks(MarkRanges & mark_ranges_);
+    const MarkRanges & getPrewhereUnmatchedMarks() const { return prewhere_unmatched_marks; }
 
     MergeTreeReadTask(
         const DataPartPtr & data_part_,

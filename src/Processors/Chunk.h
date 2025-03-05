@@ -2,6 +2,7 @@
 
 #include <Columns/IColumn.h>
 #include <unordered_map>
+#include <Storages/MergeTree/MarkRange.h>
 
 namespace DB
 {
@@ -148,6 +149,32 @@ private:
     /// It could contain less columns and rows then related block.
     RowsMaskByColumnId rows_mask_by_column_id;
 };
+
+class IMergeTreeDataPart;
+
+/// Lineage information: from which table, part and mark range does the chunk come from?
+/// This information is needed by the query condition cache.
+class MarkRangesInfo : public ChunkInfo
+{
+public:
+    MarkRangesInfo(UUID table_uuid_, const String & part_name_, size_t marks_count_, bool has_final_mark_, MarkRanges mark_ranges_)
+        : table_uuid(table_uuid_)
+        , part_name(part_name_)
+        , marks_count(marks_count_)
+        , has_final_mark(has_final_mark_)
+        , mark_ranges(std::move(mark_ranges_))
+    {}
+
+    void addMarkRanges(const MarkRanges & mark_ranges_);
+
+    UUID table_uuid;
+    String part_name;
+    size_t marks_count;
+    bool has_final_mark;
+    MarkRanges mark_ranges;
+};
+
+using MarkRangesInfoPtr = std::shared_ptr<MarkRangesInfo>;
 
 /// Converts all columns to full serialization in chunk.
 /// It's needed, when you have to access to the internals of the column,

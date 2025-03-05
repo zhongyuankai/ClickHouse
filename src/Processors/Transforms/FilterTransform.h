@@ -1,6 +1,7 @@
 #pragma once
 #include <Processors/ISimpleTransform.h>
 #include <Columns/FilterDescription.h>
+#include <Storages/MergeTree/MarkRange.h>
 
 namespace DB
 {
@@ -9,6 +10,7 @@ class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 class ActionsDAG;
+class QueryConditionCache;
 
 /** Implements WHERE, HAVING operations.
   * Takes an expression, which adds to the block one ColumnUInt8 column containing the filtering conditions.
@@ -20,7 +22,8 @@ class FilterTransform : public ISimpleTransform
 public:
     FilterTransform(
         const Block & header_, ExpressionActionsPtr expression_, String filter_column_name_,
-        bool remove_filter_column_, bool on_totals_ = false, std::shared_ptr<std::atomic<size_t>> rows_filtered_ = nullptr);
+        bool remove_filter_column_, bool on_totals_ = false, std::shared_ptr<std::atomic<size_t>> rows_filtered_ = nullptr,
+        std::optional<size_t> condition_hash_ = std::nullopt);
 
     static Block transformHeader(
             Block header,
@@ -45,6 +48,12 @@ private:
 
     std::shared_ptr<std::atomic<size_t>> rows_filtered;
 
+    /// If 'condition_hash' is set, we need to update the query condition cache at runtime.
+    std::optional<size_t> condition_hash;
+    std::shared_ptr<QueryConditionCache> query_condition_cache;
+    /// Merge mark info from the same part and write them to the query condition cache once.
+    MarkRangesInfoPtr merged_mark_info;
+
     /// Header after expression, but before removing filter column.
     Block transformed_header;
 
@@ -52,6 +61,8 @@ private:
 
     void doTransform(Chunk & chunk);
     void removeFilterIfNeed(Chunk & chunk) const;
+
+    void writeIntoQueryConditionCache(const ChunkInfoPtr & chunk_info);
 };
 
 }
