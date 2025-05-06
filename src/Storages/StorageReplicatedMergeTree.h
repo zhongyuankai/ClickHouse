@@ -930,6 +930,8 @@ private:
         bool fetch_part,
         ContextPtr query_context) override;
 
+    void forgetPartition(const ASTPtr & partition, ContextPtr query_context) override;
+
     /// NOTE: there are no guarantees for concurrent merges. Dropping part can
     /// be concurrently merged into some covering part and dropPart will do
     /// nothing. There are some fundamental problems with it. But this is OK

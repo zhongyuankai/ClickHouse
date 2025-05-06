@@ -188,6 +188,7 @@ namespace ErrorCodes
     extern const int NOT_INITIALIZED;
     extern const int SERIALIZATION_ERROR;
     extern const int TOO_MANY_MUTATIONS;
+    extern const int CANNOT_FORGET_PARTITION;
 }
 
 static void checkSuspiciousIndices(const ASTFunction * index_function)
@@ -4979,7 +4980,16 @@ void MergeTreeData::checkAlterPartitionIsPossible(
                         throw DB::Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Only support DROP/DETACH PARTITION ALL currently");
                 }
                 else
-                    getPartitionIDFromQuery(command.partition, getContext());
+                {
+                    String partition_id = getPartitionIDFromQuery(command.partition, getContext());
+                    if (command.type == PartitionCommand::FORGET_PARTITION)
+                    {
+                        DataPartsLock lock = lockParts();
+                        auto parts_in_partition = getDataPartsPartitionRange(partition_id);
+                        if (!parts_in_partition.empty())
+                            throw Exception(ErrorCodes::CANNOT_FORGET_PARTITION, "Partition {} is not empty", partition_id);
+                    }
+                }
             }
         }
     }
@@ -5148,6 +5158,11 @@ void MergeTreeData::fetchPartition(
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FETCH PARTITION is not supported by storage {}", getName());
 }
 
+void MergeTreeData::forgetPartition(const ASTPtr & /*partition*/, ContextPtr /*query_context*/)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FORGET PARTITION is not supported by storage {}", getName());
+}
+
 Pipe MergeTreeData::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
@@ -5185,6 +5200,10 @@ Pipe MergeTreeData::alterPartition(
 
             case PartitionCommand::DROP_DETACHED_PARTITION:
                 dropDetached(command.partition, command.part, query_context);
+                break;
+
+            case PartitionCommand::FORGET_PARTITION:
+                forgetPartition(command.partition, query_context);
                 break;
 
             case PartitionCommand::ATTACH_PARTITION:

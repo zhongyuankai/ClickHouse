@@ -71,6 +71,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_detach_part("DETACH PART");
     ParserKeyword s_drop_partition("DROP PARTITION");
     ParserKeyword s_drop_part("DROP PART");
+    ParserKeyword s_forget_partition("FORGET PARTITION");
     ParserKeyword s_move_partition("MOVE PARTITION");
     ParserKeyword s_move_part("MOVE PART");
     ParserKeyword s_drop_detached_partition("DROP DETACHED PARTITION");
@@ -222,6 +223,14 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                     return false;
 
                 command->type = ASTAlterCommand::DROP_PARTITION;
+                command->part = true;
+            }
+            else if (s_forget_partition.ignore(pos, expected))
+            {
+                if (!parser_partition.parse(pos, command->partition, expected))
+                    return false;
+
+                command->type = ASTAlterCommand::FORGET_PARTITION;
                 command->part = true;
             }
             else if (s_drop_detached_partition.ignore(pos, expected))
