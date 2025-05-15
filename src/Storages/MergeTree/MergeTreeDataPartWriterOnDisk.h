@@ -135,7 +135,7 @@ protected:
     const MergeTreeIndices skip_indices;
 
     const String marks_file_extension;
-    const CompressionCodecPtr default_codec;
+    CompressionCodecPtr default_codec;
 
     const bool compute_granularity;
 

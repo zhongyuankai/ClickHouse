@@ -120,6 +120,9 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
         throw Exception(ErrorCodes::LOGICAL_ERROR,
                         "Can't take information about index granularity from blocks, when non empty index_granularity array specified");
 
+    if (!settings.default_compression_codec.empty())
+        default_codec = CompressionCodecFactory::instance().get(settings.default_compression_codec);
+
     if (!data_part->getDataPartStorage().exists())
         data_part->getDataPartStorage().createDirectories();
 

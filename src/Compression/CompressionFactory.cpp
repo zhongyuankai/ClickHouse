@@ -4,9 +4,11 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ExpressionElementParsers.h>
 #include <Poco/String.h>
 #include <IO/ReadBuffer.h>
 #include <Parsers/queryToString.h>
+#include <Parsers/parseQuery.h>
 #include <Compression/CompressionCodecMultiple.h>
 #include <Compression/CompressionCodecNone.h>
 #include <IO/WriteHelpers.h>
@@ -42,6 +44,14 @@ CompressionCodecPtr CompressionCodecFactory::get(const String & family_name, std
         auto identifier = std::make_shared<ASTIdentifier>(Poco::toUpper(family_name));
         return get(makeASTFunction("CODEC", identifier), {});
     }
+}
+
+
+CompressionCodecPtr CompressionCodecFactory::get(const String & compression_codec) const
+{
+    ParserCodec codec_parser;
+    auto ast = parseQuery(codec_parser, "(" + Poco::toUpper(compression_codec) + ")", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+    return CompressionCodecFactory::instance().get(ast, nullptr);
 }
 
 

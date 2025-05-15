@@ -56,6 +56,7 @@ struct MergeTreeWriterSettings
         , compress_primary_key(storage_settings->compress_primary_key)
         , primary_key_compression_codec(storage_settings->primary_key_compression_codec)
         , primary_key_compress_block_size(storage_settings->primary_key_compress_block_size)
+        , default_compression_codec(storage_settings->default_compression_codec)
         , can_use_adaptive_granularity(can_use_adaptive_granularity_)
         , rewrite_primary_key(rewrite_primary_key_)
         , blocks_are_granules_size(blocks_are_granules_size_)
@@ -72,6 +73,7 @@ struct MergeTreeWriterSettings
     bool compress_primary_key;
     String primary_key_compression_codec;
     size_t primary_key_compress_block_size;
+    String default_compression_codec;
 
     bool can_use_adaptive_granularity;
     bool rewrite_primary_key;
