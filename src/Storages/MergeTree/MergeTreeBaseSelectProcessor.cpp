@@ -161,7 +161,7 @@ ChunkAndProgress IMergeTreeSelectAlgorithm::read()
                             auto data_part = task->data_part;
                             auto storage_id = data_part->storage.getStorageID();
                             auto query_condition_cache = Context::getGlobalContextInstance()->getQueryConditionCache();
-                            query_condition_cache->write(storage_id.uuid,
+                            query_condition_cache->write(storage_id.getShortName(),
                                 data_part->name,
                                 dag->getHash(),
                                 task->getPrewhereUnmatchedMarks(),
@@ -205,7 +205,7 @@ ChunkAndProgress IMergeTreeSelectAlgorithm::read()
                 auto & data_part = task->data_part;
                 chunk.setChunkInfo(
                     std::make_shared<MarkRangesInfo>(
-                        data_part->storage.getStorageID().uuid,
+                        data_part->storage.getStorageID().getShortName(),
                         data_part->name,
                         data_part->index_granularity.getMarksCount(),
                         data_part->index_granularity.hasFinalMark(),

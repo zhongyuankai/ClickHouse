@@ -9,6 +9,8 @@
 #include <Storages/IStorage_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SetKeys.h>
+#include <Interpreters/PreparedSets.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -50,6 +52,13 @@ public:
     virtual const DataTypes & getTypes() const = 0;
     /// If possible, return set with stored elements useful for PK analysis.
     virtual SetPtr buildOrderedSetInplace(const ContextPtr & context) = 0;
+
+    void setSetKey(uint64_t low64, uint64_t high64) { set_key = toString(low64) + "_" + toString(high64); }
+
+    const String & getSetKey() const { return set_key; } 
+
+private:
+    String set_key;
 };
 
 using FutureSetPtr = std::shared_ptr<FutureSet>;

@@ -14,7 +14,7 @@ namespace DB
 NamesAndTypesList StorageSystemQueryConditionCache::getNamesAndTypes()
 {
     return {
-        {"table_uuid", std::make_shared<DataTypeUUID>()},
+        {"table_uuid", std::make_shared<DataTypeString>()},
         {"part_name", std::make_shared<DataTypeString>()},
         {"key_hash", std::make_shared<DataTypeUInt64>()},
         {"matching_marks", std::make_shared<DataTypeString>()}

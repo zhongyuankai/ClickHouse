@@ -19,7 +19,7 @@ QueryConditionCache::QueryConditionCache(const String & cache_policy, size_t max
 }
 
 void QueryConditionCache::write(
-    const UUID & table_id, const String & part_name, size_t condition_hash,
+    const String & table_id, const String & part_name, size_t condition_hash,
     const MarkRanges & mark_ranges, size_t marks_count, bool has_final_mark)
 {
     Key key = {table_id, part_name, condition_hash};
@@ -52,7 +52,7 @@ void QueryConditionCache::write(
     }
 }
 
-std::optional<QueryConditionCache::MatchingMarks> QueryConditionCache::read(const UUID & table_id, const String & part_name, size_t condition_hash)
+std::optional<QueryConditionCache::MatchingMarks> QueryConditionCache::read(const String & table_id, const String & part_name, size_t condition_hash)
 {
     Key key = {table_id, part_name, condition_hash};
 
@@ -64,7 +64,7 @@ std::optional<QueryConditionCache::MatchingMarks> QueryConditionCache::read(cons
 
         LOG_DEBUG(
             logger,
-            "Read entry for table_uuid: {}, part: {}, condition_hash: {}, ranges: {}",
+            "Read entry for table_id: {}, part: {}, condition_hash: {}, ranges: {}",
             table_id,
             part_name,
             condition_hash,
@@ -78,7 +78,7 @@ std::optional<QueryConditionCache::MatchingMarks> QueryConditionCache::read(cons
 
         LOG_DEBUG(
             logger,
-            "Could not find entry for table_uuid: {}, part: {}, condition_hash: {}",
+            "Could not find entry for table_id: {}, part: {}, condition_hash: {}",
             table_id,
             part_name,
             condition_hash);

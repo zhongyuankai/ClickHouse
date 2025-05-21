@@ -1167,7 +1167,7 @@ void MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(
 
             const auto & data_part = part_with_ranges.data_part;
             auto storage_id = data_part->storage.getStorageID();
-            auto matching_marks_opt = query_condition_cache->read(storage_id.uuid, data_part->name, condition_hash);
+            auto matching_marks_opt = query_condition_cache->read(storage_id.getShortName(), data_part->name, condition_hash);
             if (!matching_marks_opt)
             {
                 ++it;

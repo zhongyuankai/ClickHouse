@@ -239,6 +239,7 @@ FutureSetPtr PreparedSets::addFromTuple(const Hash & key, Block block, const Set
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Duplicate set: {}", toString(key, set_types));
 
     sets_by_hash.push_back(from_tuple);
+    from_tuple->setSetKey(key.low64, key.high64);
     return from_tuple;
 }
 
@@ -250,6 +251,7 @@ FutureSetPtr PreparedSets::addFromStorage(const Hash & key, SetPtr set_)
     if (!inserted)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Duplicate set: {}", toString(key, {}));
 
+    from_storage->setSetKey(key.low64, key.low64);
     return from_storage;
 }
 
@@ -272,6 +274,7 @@ FutureSetPtr PreparedSets::addFromSubquery(
     if (!inserted)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Duplicate set: {}", toString(key, {}));
 
+    from_subquery->setSetKey(key.low64, key.high64);
     return from_subquery;
 }
 

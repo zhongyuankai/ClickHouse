@@ -157,8 +157,8 @@ class IMergeTreeDataPart;
 class MarkRangesInfo : public ChunkInfo
 {
 public:
-    MarkRangesInfo(UUID table_uuid_, const String & part_name_, size_t marks_count_, bool has_final_mark_, MarkRanges mark_ranges_)
-        : table_uuid(table_uuid_)
+    MarkRangesInfo(const String & table_id_, const String & part_name_, size_t marks_count_, bool has_final_mark_, MarkRanges mark_ranges_)
+        : table_id(table_id_)
         , part_name(part_name_)
         , marks_count(marks_count_)
         , has_final_mark(has_final_mark_)
@@ -167,7 +167,7 @@ public:
 
     void addMarkRanges(const MarkRanges & mark_ranges_);
 
-    UUID table_uuid;
+    String table_id;
     String part_name;
     size_t marks_count;
     bool has_final_mark;

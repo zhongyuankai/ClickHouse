@@ -1147,7 +1147,10 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                 ///  so that sets with the same literal representation do not fuse together (they can have different types).
                 const bool is_constant_set = typeid_cast<const FutureSetFromSubquery *>(prepared_set.get()) == nullptr;
                 if (is_constant_set)
-                    column.name = data.getUniqueName("__set");
+                {
+                    column.name = data.getUniqueName("__set_" + prepared_set->getSetKey());
+                    // column.name = data.getUniqueName("__set");
+                }
                 else
                     column.name = child->getColumnName();
 
