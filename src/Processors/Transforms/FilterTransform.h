@@ -23,7 +23,7 @@ public:
     FilterTransform(
         const Block & header_, ExpressionActionsPtr expression_, String filter_column_name_,
         bool remove_filter_column_, bool on_totals_ = false, std::shared_ptr<std::atomic<size_t>> rows_filtered_ = nullptr,
-        std::optional<size_t> condition_hash_ = std::nullopt);
+        std::optional<std::pair<size_t, String>> condition_ = std::nullopt);
 
     static Block transformHeader(
             Block header,
@@ -49,7 +49,7 @@ private:
     std::shared_ptr<std::atomic<size_t>> rows_filtered;
 
     /// If 'condition_hash' is set, we need to update the query condition cache at runtime.
-    std::optional<size_t> condition_hash;
+    std::optional<std::pair<size_t, String>> condition;
     std::shared_ptr<QueryConditionCache> query_condition_cache;
     /// Merge mark info from the same part and write them to the query condition cache once.
     MarkRangesInfoPtr merged_mark_info;

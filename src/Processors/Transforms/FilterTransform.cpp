@@ -70,7 +70,7 @@ FilterTransform::FilterTransform(
     bool remove_filter_column_,
     bool on_totals_,
     std::shared_ptr<std::atomic<size_t>> rows_filtered_,
-    std::optional<size_t> condition_hash_)
+    std::optional<std::pair<size_t, String>> condition_)
     : ISimpleTransform(
             header_,
             transformHeader(header_, expression_ ? &expression_->getActionsDAG() : nullptr, filter_column_name_, remove_filter_column_),
@@ -80,7 +80,7 @@ FilterTransform::FilterTransform(
     , remove_filter_column(remove_filter_column_)
     , on_totals(on_totals_)
     , rows_filtered(rows_filtered_)
-    , condition_hash(condition_hash_)
+    , condition(condition_)
 
 {
     transformed_header = getInputPort().getHeader();
@@ -92,7 +92,7 @@ FilterTransform::FilterTransform(
     if (column)
         constant_filter_description = ConstantFilterDescription(*column);
 
-    if (condition_hash.has_value())
+    if (condition.has_value())
         query_condition_cache = Context::getGlobalContextInstance()->getQueryConditionCache();
 }
 
@@ -282,7 +282,8 @@ void FilterTransform::writeIntoQueryConditionCache(const ChunkInfoPtr & chunk_in
         query_condition_cache->write(
             merged_mark_info->table_id,
             merged_mark_info->part_name,
-            *condition_hash,
+            condition->first,
+            condition->second,
             merged_mark_info->mark_ranges,
             merged_mark_info->marks_count,
             merged_mark_info->has_final_mark);
@@ -307,7 +308,8 @@ void FilterTransform::writeIntoQueryConditionCache(const ChunkInfoPtr & chunk_in
             query_condition_cache->write(
                 merged_mark_info->table_id,
                 merged_mark_info->part_name,
-                *condition_hash,
+                condition->first,
+                condition->second,
                 merged_mark_info->mark_ranges,
                 merged_mark_info->marks_count,
                 merged_mark_info->has_final_mark);

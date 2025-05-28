@@ -45,6 +45,7 @@ struct QueryPlanOptimizationSettings
 
     /// If query condition cache is enabled, the query condition cache needs to be updated in the WHERE stage.
     bool use_query_condition_cache = false;
+    bool query_condition_cache_store_conditions_as_plaintext;
 
     static QueryPlanOptimizationSettings fromSettings(const Settings & from);
     static QueryPlanOptimizationSettings fromContext(ContextPtr from);

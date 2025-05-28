@@ -4,6 +4,7 @@
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Storages/MergeTree/RequestResponse.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <Columns/FilterDescription.h>
 #include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/logger_useful.h>
@@ -154,16 +155,23 @@ ChunkAndProgress IMergeTreeSelectAlgorithm::read()
             {
                 if (task && prewhere_info && reader_settings.use_query_condition_cache)
                 {
-                    for (const auto * dag : prewhere_info->prewhere_actions->getOutputs())
+                    /// Update the query condition cache for filters in PREWHERE stage
+                    for (const auto * output : prewhere_info->prewhere_actions->getOutputs())
                     {
-                        if (dag->result_name == prewhere_info->prewhere_column_name)
+                        if (output->result_name == prewhere_info->prewhere_column_name)
                         {
+                            if (!VirtualColumnUtils::isDeterministic(output))
+                                continue;
+
                             auto data_part = task->data_part;
                             auto storage_id = data_part->storage.getStorageID();
                             auto query_condition_cache = Context::getGlobalContextInstance()->getQueryConditionCache();
                             query_condition_cache->write(storage_id.getShortName(),
                                 data_part->name,
-                                dag->getHash(),
+                                output->getHash(),
+                                reader_settings.query_condition_cache_store_conditions_as_plaintext
+                                ? prewhere_info->prewhere_actions->getNames()[0]
+                                : "",
                                 task->getPrewhereUnmatchedMarks(),
                                 data_part->index_granularity.getMarksCount(),
                                 data_part->index_granularity.hasFinalMark());

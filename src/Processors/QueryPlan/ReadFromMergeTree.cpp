@@ -121,6 +121,7 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(
             && (settings.max_streams_to_max_threads_ratio > 1 || settings.max_streams_for_merge_tree_reading > 1),
         .enable_multiple_prewhere_read_steps = settings.enable_multiple_prewhere_read_steps,
         .use_query_condition_cache = settings.use_query_condition_cache,
+        .query_condition_cache_store_conditions_as_plaintext = settings.query_condition_cache_store_conditions_as_plaintext,
     };
 }
 

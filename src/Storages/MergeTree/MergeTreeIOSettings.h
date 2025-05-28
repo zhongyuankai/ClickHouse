@@ -33,6 +33,7 @@ struct MergeTreeReaderSettings
     bool enable_multiple_prewhere_read_steps = false;
     /// If we should write/read to/from the query condition cache.
     bool use_query_condition_cache = false;
+    bool query_condition_cache_store_conditions_as_plaintext = false;
 };
 
 struct MergeTreeWriterSettings

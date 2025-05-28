@@ -622,6 +622,7 @@ class IColumn;
     M(Seconds, query_cache_ttl_for_expired_data, 120, "After this time in seconds entries in the query cache become stale for old data", 0) \
     M(Bool, enable_sharing_sets_for_mutations, true, "Allow sharing set objects build for IN subqueries between different tasks of the same mutation. This reduces memory usage and CPU consumption", 0) \
     M(Bool, use_query_condition_cache, false, "Enable the query condition cache", 0) \
+    M(Bool, query_condition_cache_store_conditions_as_plaintext, false, "Stores the filter condition for the in plaintext", 0) \
     \
     M(Bool, optimize_rewrite_sum_if_to_count_if, false, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(Bool, optimize_rewrite_aggregate_function_with_if, true, "Rewrite aggregate functions with if expression as argument when logically equivalent. For example, avg(if(cond, col, null)) can be rewritten to avgIf(cond, col)", 0) \
