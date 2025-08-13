@@ -72,6 +72,7 @@ const VersionToSettingsChangesMap & getSettingsChangesHistory()
             {"write_full_path_in_iceberg_metadata", false, false, "New setting."},
             {"output_format_orc_compression_block_size", 65536, 262144, "New setting"},
             {"apply_patch_parts_join_cache_buckets", 8, 8, "New setting"},
+            {"query_condition_cache_selectivity_threshold", 1.0, 1.0, "New setting."},
             {"delta_lake_throw_on_engine_predicate_error", false, false, "New setting"},
             {"delta_lake_enable_engine_predicate", true, true, "New setting"},
             {"backup_restore_s3_retry_initial_backoff_ms", 25, 25, "New setting"},
@@ -95,7 +96,6 @@ const VersionToSettingsChangesMap & getSettingsChangesHistory()
             /// RELEASE CLOSED
             {"correlated_subqueries_substitute_equivalent_expressions", false, true, "New setting to correlated subquery planning optimization."},
             {"function_date_trunc_return_type_behavior", 0, 0, "Add new setting to preserve old behaviour of dateTrunc function"},
-            {"query_condition_cache_selectivity_threshold", 1.0, 1.0, "New setting."},
             {"output_format_parquet_geometadata", false, true, "A new setting to allow to write information about geo columns in parquet metadata and encode columns in WKB format."},
             {"cluster_function_process_archive_on_multiple_nodes", false, true, "New setting"},
             {"enable_vector_similarity_index", false, false, "Added an alias for setting `allow_experimental_vector_similarity_index`"},
