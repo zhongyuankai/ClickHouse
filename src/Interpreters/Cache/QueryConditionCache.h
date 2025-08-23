@@ -1,6 +1,9 @@
 #pragma once
 
+#include <memory>
+#include <shared_mutex>
 #include <Common/CacheBase.h>
+#include "Coordination/Changelog.h"
 #include <Storages/MergeTree/MarkRange.h>
 #include <base/defines.h>
 
@@ -85,6 +88,32 @@ using QueryConditionCachePtr = std::shared_ptr<QueryConditionCache>;
 /// AddRanges() creates/updates entries for the query condition cache (one entry per part), finalize() inserts them into the cache.
 class QueryConditionCacheWriter
 {
+private:
+    struct CacheEntry
+    {
+        QueryConditionCache::Entry entry;
+        std::shared_mutex mutex;
+
+        explicit CacheEntry(const QueryConditionCache::Entry & entry_)
+        : entry(entry_)
+        {
+        }
+
+        /** 
+          * By default, all marks potentially are potential matches, i.e. we can't skip them.
+          * Treat all marks for the new entry of the part as potential matches, i.e. don't skip them during read.
+          * This is important for error handling: Imagine an exception is thrown during query execution and the stack is unwound. At that
+          * point, a new entry may not have received updates for all scanned ranges within the part. As a result, future scans queries could
+          * skip too many ranges, causing wrong results. This situation is prevented by initializing all marks of each entry as non-matching.
+          * Even if there is an exception, future scans will not skip them.
+          */
+        explicit CacheEntry(size_t marks_count)
+        : entry(marks_count, true)
+        {
+        }
+    };
+    using CacheEntryPtr = std::shared_ptr<CacheEntry>;
+
 public:
     QueryConditionCacheWriter(
         QueryConditionCache & query_condition_cache_,
@@ -101,12 +130,14 @@ public:
 private:
     void finalize();
 
+    bool needUpdateMarks(const QueryConditionCache::Entry & entry, const MarkRanges & mark_ranges, size_t marks_count, bool has_final_mark) const;
+
     QueryConditionCache & query_condition_cache;
     const size_t condition_hash;
     const String condition;
     const double selectivity_threshold;
 
-    std::unordered_map<QueryConditionCache::Key, QueryConditionCache::Entry, QueryConditionCache::KeyHasher> new_entries TSA_GUARDED_BY(mutex);
+    std::unordered_map<QueryConditionCache::Key, CacheEntryPtr, QueryConditionCache::KeyHasher> new_entries TSA_GUARDED_BY(mutex);
     std::mutex mutex;
 
     LoggerPtr logger = getLogger("QueryConditionCache");
