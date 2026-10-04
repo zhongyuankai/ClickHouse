@@ -626,12 +626,14 @@ void MetadataStorageFromPlainObjectStorageUnlinkMetadataFileOperation::finalize(
 MetadataStorageFromPlainObjectStorageCopyFileOperation::MetadataStorageFromPlainObjectStorageCopyFileOperation(
     std::filesystem::path path_from_,
     std::filesystem::path path_to_,
+    std::string blob_key_,
     std::shared_ptr<FsSnapshot> fs_tree_,
     std::shared_ptr<IObjectStorage> object_storage_,
     std::shared_ptr<PlainRewritableLayout> layout_,
     std::shared_ptr<PlainRewritableMetrics> metrics_)
     : path_from(std::move(path_from_))
     , path_to(std::move(path_to_))
+    , blob_key(std::move(blob_key_))
     , fs_tree(std::move(fs_tree_))
     , object_storage(std::move(object_storage_))
     , layout(std::move(layout_))
@@ -668,19 +670,26 @@ void MetadataStorageFromPlainObjectStorageCopyFileOperation::execute()
     const auto normalized_path_to = normalizePath(path_to);
     const auto directory_to = normalized_path_to.parent_path();
     const auto directory_info_to = getDirectoryInfoOrThrow(*fs_tree, directory_to);
-    /// The copy is a new blob at the default location, so it needs no explicit file list of its own.
-    remote_path_to = layout->constructFileObjectKey(directory_info_to.remote_path, normalized_path_to.filename());
+    /// The default key of a directory in the explicit form may hold a blob that is still linked from elsewhere.
+    if (directory_info_to.has_explicit_file_list && blob_key.empty())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "The copy of '{}' to the directory '{}' in the explicit form has no blob key", path_from, directory_to.string());
+
+    const std::string default_blob_key = getDefaultBlobKey(directory_info_to.remote_path, normalized_path_to.filename());
+    const std::string new_blob_key = blob_key.empty() ? default_blob_key : blob_key;
+    remote_path_to = layout->constructBlobObjectKey(new_blob_key);
 
     copy_attempted = true;
     object_storage->copyObject(StoredObject(remote_path_from), StoredObject(remote_path_to), getReadSettings(), getWriteSettings());
-    fs_tree->recordFile(path_to, FileRemoteInfo{.bytes_size = file_info_from.bytes_size, .last_modified = file_info_from.last_modified, .blob_key = {}});
+    fs_tree->recordFile(path_to, FileRemoteInfo{.bytes_size = file_info_from.bytes_size, .last_modified = file_info_from.last_modified, .blob_key = new_blob_key});
 
+    /// A blob at the default location of an implicit directory is found by listing, so it needs no explicit file list.
     /// A directory in the explicit form does not list its blobs, so the copy has to be added to `prefix.path`.
     /// This happens only on a disk that had hard links enabled before.
-    if (!directory_info_to.has_explicit_file_list)
+    if (!directory_info_to.has_explicit_file_list && new_blob_key == default_blob_key)
         return;
 
     previous_directory_info = directory_info_to;
+    fs_tree->markDirectoryExplicit(directory_to);
     prefix_path_written = true;
     writeDirectoryMetadata(*object_storage, *layout, directory_to, getDirectoryInfoOrThrow(*fs_tree, directory_to));
 }

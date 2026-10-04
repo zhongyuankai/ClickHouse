@@ -205,6 +205,9 @@ class MetadataStorageFromPlainObjectStorageCopyFileOperation final : public IMet
 private:
     const std::filesystem::path path_from;
     const std::filesystem::path path_to;
+    /// The key of the new blob: empty for the default location of an implicit target directory, and a random one
+    /// for a target directory in the explicit form.
+    const std::string blob_key;
     const std::shared_ptr<FsSnapshot> fs_tree;
     const std::shared_ptr<IObjectStorage> object_storage;
     const std::shared_ptr<PlainRewritableLayout> layout;
@@ -222,6 +225,7 @@ public:
     MetadataStorageFromPlainObjectStorageCopyFileOperation(
         std::filesystem::path path_from_,
         std::filesystem::path path_to_,
+        std::string blob_key_,
         std::shared_ptr<FsSnapshot> fs_tree_,
         std::shared_ptr<IObjectStorage> object_storage_,
         std::shared_ptr<PlainRewritableLayout> layout_,

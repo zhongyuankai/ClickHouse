@@ -3029,6 +3029,61 @@ TEST_F(MetadataPlainRewritableDiskTest, HardLinksDisabled)
     EXPECT_EQ(metadata->getFileSize("A/f2"), 4u);
 }
 
+/// A directory in the explicit form may keep a blob at the default location of a removed file, because another file
+/// still links to it. After `enable_hard_links` is turned off, the copy that stands in for a hard link to the same name
+/// must not overwrite that blob.
+TEST_F(MetadataPlainRewritableDiskTest, HardLinksDisabledCopyIntoExplicitDirectory)
+{
+    thread_local_rng.seed(42);
+
+    const std::string test = "HardLinksDisabledCopyIntoExplicitDirectory";
+    auto metadata = getMetadataStorage(test);
+    auto object_storage = getObjectStorage(test);
+
+    {
+        auto tx = metadata->createTransaction();
+        tx->createDirectory("B");
+        tx->createDirectory("C");
+        tx->createDirectory("D");
+        size_t size = writeObject(object_storage, tx->generateObjectKeyForPath("B/f1").serialize(), "shared");
+        tx->createMetadataFile("B/f1", {StoredObject("f1", "f1", size)});
+        size = writeObject(object_storage, tx->generateObjectKeyForPath("D/g").serialize(), "other");
+        tx->createMetadataFile("D/g", {StoredObject("g", "g", size)});
+        tx->createHardLink("B/f1", "C/f1");
+        tx->commit(DB::NoCommitOptions{});
+    }
+
+    {
+        auto tx = metadata->createTransaction();
+        tx->unlinkFile("B/f1", /*if_exists=*/false, /*should_remove_objects=*/true);
+        tx->commit(DB::NoCommitOptions{});
+    }
+
+    const auto shared_remote_path = metadata->getStorageObjects("C/f1").front().remote_path;
+
+    hard_links_enabled = false;
+    metadata = restartMetadataStorage(test);
+
+    {
+        auto tx = metadata->createTransaction();
+        tx->createHardLink("D/g", "B/f1");
+        tx->commit(DB::NoCommitOptions{});
+    }
+
+    const auto copy_remote_path = metadata->getStorageObjects("B/f1").front().remote_path;
+    EXPECT_NE(copy_remote_path, shared_remote_path);
+    EXPECT_EQ(readObject(object_storage, copy_remote_path), "other");
+    EXPECT_EQ(readObject(object_storage, shared_remote_path), "shared");
+
+    const auto b_prefix_path = parsePrefixPath(readObject(object_storage, createMetadataObjectPath(metadata, "B")));
+    EXPECT_TRUE(b_prefix_path.has_explicit_file_list);
+    EXPECT_EQ(b_prefix_path.files.size(), 1u);
+
+    metadata = restartMetadataStorage(test);
+    EXPECT_EQ(readObject(object_storage, metadata->getStorageObjects("B/f1").front().remote_path), "other");
+    EXPECT_EQ(readObject(object_storage, metadata->getStorageObjects("C/f1").front().remote_path), "shared");
+}
+
 /// Without `enable_hard_links` a hard link is a copy that runs at commit. A rewrite of the link in the same transaction
 /// has to keep the new bytes: the copy would otherwise go to the same key as the rewrite and overwrite them.
 TEST_F(MetadataPlainRewritableDiskTest, HardLinksDisabledRewriteLinkInTheSameTransaction)

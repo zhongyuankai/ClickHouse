@@ -903,14 +903,23 @@ void MetadataStorageFromPlainRewritableObjectStorageTransaction::createHardLink(
     /// A real hard link would make the metadata of the target directory unreadable by older servers, so it is opt-in.
     if (!metadata_storage.hard_links_enabled)
     {
-        /// The copy is a new file with its own blob at the default location of the target directory. The following
-        /// operations of this transaction have to see it, like any other created file: otherwise a rewrite of the
-        /// target would plan as the creation of a missing file, and the copy would overwrite it at commit.
-        uncommitted_state.recordCreatedFile(path_to, /*blob_key=*/"");
+        /// The copy is a new file with its own blob. In an implicit target directory the blob goes to the default location.
+        /// A directory in the explicit form (written while hard links were enabled) may still have a blob at the default
+        /// location that is linked from elsewhere after its file there was removed, so the copy gets a fresh random key,
+        /// like any new file of such a directory (see `generateObjectKeyForPath`).
+        std::string blob_key;
+        if (const auto directory_to = uncommitted_state.getDirectoryRemoteInfo(normalized_path_to.parent_path());
+            directory_to && directory_to->has_explicit_file_list)
+            blob_key = getDefaultBlobKey(directory_to->remote_path, getRandomASCIIString(32));
+
+        /// The following operations of this transaction have to see the copy, like any other created file: otherwise
+        /// a rewrite of the target would plan as the creation of a missing file, and the copy would overwrite it at commit.
+        uncommitted_state.recordCreatedFile(path_to, blob_key);
 
         auto copy = std::make_unique<MetadataStorageFromPlainObjectStorageCopyFileOperation>(
             path_from,
             path_to,
+            std::move(blob_key),
             commit_snapshot,
             metadata_storage.object_storage,
             metadata_storage.layout,
