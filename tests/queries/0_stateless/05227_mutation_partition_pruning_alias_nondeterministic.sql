@@ -131,6 +131,10 @@ ALTER TABLE t_prune_alias_lambda_scope DELETE WHERE p = 1 AND arrayExists(s -> d
 -- the name `d`, so the predicate still prunes. Declining to prune whenever a followed definition
 -- mentions a bound name would be safe but would lose that.
 ALTER TABLE t_prune_alias_lambda_scope DELETE WHERE p = 1 AND arrayExists(d -> e = 3 AND d = 1, arr);
+-- The `WHERE` predicate of an `ALTER UPDATE` is pruned by the same analysis.
+ALTER TABLE t_prune_alias_lambda_scope UPDATE arr = [0] WHERE p = 1 AND arrayExists(s -> s = r, arr);
+ALTER TABLE t_prune_alias_lambda_scope UPDATE arr = [0] WHERE p = 1 AND arrayExists(s -> d = 1 AND s = 1, arr);
+ALTER TABLE t_prune_alias_lambda_scope UPDATE arr = [0] WHERE p = 1 AND arrayExists(d -> e = 3 AND d = 1, arr);
 -- The mutation entry is written to ZooKeeper by the `ALTER`, but it becomes visible in
 -- `system.mutations` only after the replica pulls it, so pull it explicitly instead of racing.
 SYSTEM SYNC REPLICA t_prune_alias_lambda_scope PULL;
