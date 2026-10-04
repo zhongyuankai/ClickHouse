@@ -94,6 +94,7 @@ public:
     void applyCatalogSpecificConfiguration(StorageObjectStorageConfiguration & configuration) const;
 
     static bool catalogManagesProviderChain(const DataLake::ICatalog & catalog);
+    static bool catalogConfiguresStorageAccess(const DataLake::ICatalog & catalog);
 protected:
     ASTPtr getCreateDatabaseQueryImpl() const override TSA_REQUIRES(mutex);
     ASTPtr getCreateTableQueryImpl(const String & table_name, ContextPtr context, bool throw_on_error) const override;

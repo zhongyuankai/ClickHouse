@@ -723,6 +723,14 @@ bool DatabaseDataLake::catalogManagesProviderChain(const DataLake::ICatalog & ca
     return catalog.getCatalogType() == DatabaseDataLakeCatalogType::GLUE;
 }
 
+bool DatabaseDataLake::catalogConfiguresStorageAccess(const DataLake::ICatalog & catalog)
+{
+    const auto catalog_type = catalog.getCatalogType();
+    return catalog_type == DatabaseDataLakeCatalogType::ICEBERG_ONELAKE
+        || catalog_type == DatabaseDataLakeCatalogType::ICEBERG_BIGLAKE
+        || catalog_type == DatabaseDataLakeCatalogType::PAIMON_REST;
+}
+
 DatabaseDataLake::TableEngineArgs DatabaseDataLake::buildTableEngineArgs(
     const DatabaseDataLakeSettings & settings,
     const DataLake::ICatalog & catalog,
@@ -761,8 +769,6 @@ DatabaseDataLake::TableEngineArgs DatabaseDataLake::buildTableEngineArgs(
     /// Only one arg means the user gave no credentials in CREATE DATABASE. Find them elsewhere.
     if (result.args.size() == 1)
     {
-        std::array<DatabaseDataLakeCatalogType, 3> catalogs_not_passing_credentials_in_args = {DatabaseDataLakeCatalogType::ICEBERG_ONELAKE, DatabaseDataLakeCatalogType::ICEBERG_BIGLAKE, DatabaseDataLakeCatalogType::PAIMON_REST};
-
         std::shared_ptr<DataLake::IStorageCredentials> static_credentials;
         if (!catalogManagesProviderChain(catalog))
             static_credentials = DataLake::tryGetStaticStorageCredentials(result.storage_type, settings);
@@ -787,7 +793,7 @@ DatabaseDataLake::TableEngineArgs DatabaseDataLake::buildTableEngineArgs(
             static_credentials->addCredentialsToEngineArgs(result.args);
             result.static_credentials_applied = true;
         }
-        else if (!lightweight && table_metadata.requiresCredentials() && std::find(catalogs_not_passing_credentials_in_args.begin(), catalogs_not_passing_credentials_in_args.end(), catalog.getCatalogType()) == catalogs_not_passing_credentials_in_args.end())
+        else if (!lightweight && table_metadata.requiresCredentials() && !catalogConfiguresStorageAccess(catalog))
         {
             throw Exception(
                ErrorCodes::BAD_ARGUMENTS,
@@ -1007,7 +1013,8 @@ ASTs DatabaseDataLake::getEngineArgsForNewTable(const String & name, ObjectStora
             static_credentials->addCredentialsToEngineArgs(engine_args.args);
     }
 
-    if (engine_args.args.size() == 1 && (settings[DatabaseDataLakeSetting::vended_credentials].value || catalog_manages_provider_chain))
+    if (engine_args.args.size() == 1 && !catalogConfiguresStorageAccess(*catalog)
+        && (settings[DatabaseDataLakeSetting::vended_credentials].value || catalog_manages_provider_chain))
         throw Exception(
             ErrorCodes::BAD_ARGUMENTS,
             "Cannot create table {} in database {} without table engine arguments: the database takes storage credentials "
