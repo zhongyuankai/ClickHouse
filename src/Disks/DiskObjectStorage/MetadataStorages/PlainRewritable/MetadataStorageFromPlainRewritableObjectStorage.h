@@ -142,7 +142,7 @@ protected:
     /// old and the new path are marked as `moved`, and a rewrite of them is refused.
     struct FallbackCopy
     {
-        MetadataStorageFromPlainObjectStorageCopyFileOperation * copy;
+        MetadataStorageFromPlainObjectStorageCopyFileOperation * copy = nullptr;
         bool moved = false;
     };
     std::unordered_map<std::string, FallbackCopy> fallback_copies;
