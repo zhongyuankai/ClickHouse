@@ -1261,8 +1261,7 @@ private:
         /// When any tuple element has Nothing or Nullable(Nothing) type, element-wise
         /// comparisons would produce ColumnNothing which doesn't match the declared
         /// Nullable(UInt8) return type. Return all-NULL column of the correct type.
-        /// `result_type` may arrive without Nullable (the default implementation for NULLs strips it),
-        /// so the all-NULL column is built from `makeNullable(result_type)`.
+        /// `result_type` may arrive without Nullable: the default implementation for NULLs strips it.
         /// Skip this for null-safe comparison mode because NULL <=> NULL should return 1,
         /// and the element-wise null-safe comparison handles Nothing types correctly.
         if constexpr (!is_null_safe_cmp_mode)
