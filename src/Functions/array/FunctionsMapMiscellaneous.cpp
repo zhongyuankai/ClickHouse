@@ -420,38 +420,6 @@ private:
     FunctionLike impl;
 };
 
-class FunctionMapRemovePredicate final : public IFunction
-{
-public:
-    explicit FunctionMapRemovePredicate(FunctionOverloadResolverPtr is_distinct_from_resolver_)
-        : is_distinct_from_resolver(std::move(is_distinct_from_resolver_))
-    {
-    }
-
-    String getName() const override { return "mapRemovePredicate"; }
-    size_t getNumberOfArguments() const override { return 3; }
-    bool useDefaultImplementationForNulls() const override { return false; }
-    bool useDefaultImplementationForNothing() const override { return false; }
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo &) const override { return false; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        return is_distinct_from_resolver->getReturnType({
-            {nullptr, arguments[1], "key"},
-            {nullptr, arguments[0], "remove_key"}});
-    }
-
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
-    {
-        ColumnsWithTypeAndName comparison_arguments{arguments[1], arguments[0]};
-        auto comparison = is_distinct_from_resolver->build(comparison_arguments);
-        return comparison->execute(comparison_arguments, result_type, input_rows_count, false);
-    }
-
-private:
-    FunctionOverloadResolverPtr is_distinct_from_resolver;
-};
-
 /// Adapter for map*KeyLike functions.
 /// It extracts nested Array(Tuple(key, value)) from Map columns
 /// and prepares ColumnFunction as first argument which works
@@ -712,9 +680,7 @@ public:
     }
 
     explicit FunctionMapRemove(const ContextPtr & context)
-        : map_filter_resolver(FunctionFactory::instance().get("mapFilter", context))
-        , is_distinct_from_resolver(FunctionFactory::instance().get("isDistinctFrom", context))
-        , enable_lazy_columns_replication(context->getSettingsRef()[Setting::enable_lazy_columns_replication])
+        : is_distinct_from_resolver(FunctionFactory::instance().get("isDistinctFrom", context))
     {
     }
 
@@ -728,11 +694,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 2)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Number of arguments for function {} doesn't match: passed {}, should be 2",
-                getName(), arguments.size());
-
         const auto * map_type = checkAndGetDataType<DataTypeMap>(arguments[0].get());
         if (!map_type)
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
@@ -740,59 +701,42 @@ public:
 
         const auto key_type = recursiveRemoveLowCardinality(map_type->getKeyType());
         const auto remove_key_type = recursiveRemoveLowCardinality(arguments[1]);
-        getPredicateResultType(key_type, remove_key_type);
+        is_distinct_from_resolver->getReturnType({
+            {nullptr, key_type, "key"},
+            {nullptr, remove_key_type, "remove_key"}});
         return arguments[0];
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
     {
+        auto map_column = arguments[0].column->convertToFullColumnIfConst();
+        const auto & map = assert_cast<const ColumnMap &>(*map_column);
+        const auto & nested_map = map.getNestedColumn();
+        const auto & offsets = nested_map.getOffsets();
+
         const auto & map_type = assert_cast<const DataTypeMap &>(*arguments[0].type);
-        auto remove_key_arguments = ColumnsWithTypeAndName{arguments[1]};
-        convertLowCardinalityColumnsToFull(remove_key_arguments);
-        const auto & remove_key_argument = remove_key_arguments[0];
+        auto key_column = recursiveRemoveLowCardinality(map.getNestedData().getColumnPtr(0));
+        auto key_type = recursiveRemoveLowCardinality(map_type.getKeyType());
 
-        DataTypes lambda_argument_types{
-            recursiveRemoveLowCardinality(map_type.getKeyType()),
-            recursiveRemoveLowCardinality(map_type.getValueType())};
-        auto predicate_result_type = getPredicateResultType(lambda_argument_types[0], remove_key_argument.type);
+        auto remove_key_column = recursiveRemoveLowCardinality(arguments[1].column);
+        auto remove_key_type = recursiveRemoveLowCardinality(arguments[1].type);
+        auto replicated_remove_key = remove_key_column->replicate(offsets);
 
-        auto predicate = std::make_shared<FunctionMapRemovePredicate>(is_distinct_from_resolver);
-        DataTypes predicate_argument_types{remove_key_argument.type, lambda_argument_types[0], lambda_argument_types[1]};
-        auto predicate_function = std::make_shared<FunctionToFunctionBaseAdaptor>(
-            predicate, predicate_argument_types, predicate_result_type);
-        ColumnPtr predicate_column;
-        if (remove_key_argument.column)
-        {
-            /// Capture remove_key here; mapFilter appends the map key and value when it invokes the predicate.
-            predicate_column = ColumnFunction::create(
-                remove_key_argument.column->size(),
-                std::move(predicate_function),
-                ColumnsWithTypeAndName{remove_key_argument},
-                /*is_short_circuit_argument_=*/ false,
-                /*is_function_compiled_=*/ false,
-                /*recursively_convert_result_to_full_column_if_low_cardinality_=*/ false,
-                /*allow_lazy_replicated_captures_=*/ enable_lazy_columns_replication);
-        }
+        const size_t map_elements_count = key_column->size();
+        ColumnsWithTypeAndName comparison_arguments{
+            {std::move(key_column), std::move(key_type), "key"},
+            {std::move(replicated_remove_key), std::move(remove_key_type), "remove_key"}};
 
-        auto predicate_type = std::make_shared<DataTypeFunction>(lambda_argument_types, predicate_result_type);
-        ColumnsWithTypeAndName map_filter_arguments{
-            {std::move(predicate_column), predicate_type, "__function_map_remove"},
-            arguments[0]};
-        auto map_filter_function = map_filter_resolver->build(map_filter_arguments);
-        return map_filter_function->execute(map_filter_arguments, result_type, input_rows_count, false);
+        auto comparison = is_distinct_from_resolver->build(comparison_arguments);
+        auto filter = comparison->execute(
+            comparison_arguments, comparison->getResultType(), map_elements_count, /* dry_run = */ false);
+
+        auto filtered_nested_map = ArrayFilterImpl::execute(nested_map, std::move(filter));
+        return ColumnMap::create(std::move(filtered_nested_map));
     }
 
 private:
-    DataTypePtr getPredicateResultType(const DataTypePtr & key_type, const DataTypePtr & remove_key_type) const
-    {
-        return is_distinct_from_resolver->getReturnType({
-            {nullptr, key_type, "key"},
-            {nullptr, remove_key_type, "remove_key"}});
-    }
-
-    FunctionOverloadResolverPtr map_filter_resolver;
     FunctionOverloadResolverPtr is_distinct_from_resolver;
-    bool enable_lazy_columns_replication;
 };
 
 REGISTER_FUNCTION(MapMiscellaneous)
