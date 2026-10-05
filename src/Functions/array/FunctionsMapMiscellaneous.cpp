@@ -10,7 +10,6 @@
 #include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeMapHelpers.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/getLeastSupertype.h>
 
@@ -740,7 +739,7 @@ public:
             auto keep = ColumnUInt8::create(map_elements_count);
             auto & keep_data = keep->getData();
             for (size_t i = 0; i < map_elements_count; ++i)
-                keep_data[i] = static_cast<UInt8>(!mapKeyEquals(*key_column, i, *replicated_remove_key, i));
+                keep_data[i] = static_cast<UInt8>(key_column->compareAt(i, i, *replicated_remove_key, 1) != 0);
             filter = std::move(keep);
         }
         else
