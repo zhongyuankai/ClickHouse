@@ -52788,6 +52788,74 @@
     "source": "/zh/resources/about/history"
   },
   {
+    "source": "/products/cloud/api-reference/udf/udf-attach",
+    "destination": "/products/cloud/api-reference/udf/attach-udf-to-service"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-attachment-get",
+    "destination": "/products/cloud/api-reference/udf/get-udf-attachment"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-attachment-list",
+    "destination": "/products/cloud/api-reference/udf/list-udf-attachments"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-create",
+    "destination": "/products/cloud/api-reference/udf/create-udf"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-delete",
+    "destination": "/products/cloud/api-reference/udf/delete-udf"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-detach",
+    "destination": "/products/cloud/api-reference/udf/detach-udf-from-service"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-get",
+    "destination": "/products/cloud/api-reference/udf/get-udf"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-list",
+    "destination": "/products/cloud/api-reference/udf/list-udfs"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-upload-session-create",
+    "destination": "/products/cloud/api-reference/udf/create-udf-upload-url"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-version-create",
+    "destination": "/products/cloud/api-reference/udf/create-udf-version"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-version-delete",
+    "destination": "/products/cloud/api-reference/udf/delete-udf-version"
+  },
+  {
+    "source": "/products/cloud/api-reference/udf/udf-version-list",
+    "destination": "/products/cloud/api-reference/udf/list-udf-versions"
+  },
+  {
+    "source": "/products/cloud/api-reference/query-api-endpoints/query-api-endpoint-create",
+    "destination": "/products/cloud/api-reference/query-api-endpoints/create-a-query-api-endpoint"
+  },
+  {
+    "source": "/products/cloud/api-reference/query-api-endpoints/query-api-endpoint-delete",
+    "destination": "/products/cloud/api-reference/query-api-endpoints/delete-a-query-api-endpoint"
+  },
+  {
+    "source": "/products/cloud/api-reference/query-api-endpoints/query-api-endpoint-get",
+    "destination": "/products/cloud/api-reference/query-api-endpoints/get-a-query-api-endpoint"
+  },
+  {
+    "source": "/products/cloud/api-reference/query-api-endpoints/query-api-endpoint-list",
+    "destination": "/products/cloud/api-reference/query-api-endpoints/list-query-api-endpoints"
+  },
+  {
+    "source": "/products/cloud/api-reference/query-api-endpoints/query-api-endpoint-update",
+    "destination": "/products/cloud/api-reference/query-api-endpoints/update-a-query-api-endpoint"
+  },
+  {
     "destination": "/products/cloud/api-reference/:path*",
     "source": "/api-reference/:path*"
   },
