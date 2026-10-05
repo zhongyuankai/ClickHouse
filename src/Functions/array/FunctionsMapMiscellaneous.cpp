@@ -727,8 +727,8 @@ public:
 
         const size_t map_elements_count = key_column->size();
         ColumnsWithTypeAndName comparison_arguments{
-            {std::move(key_column), std::move(key_type), "key"},
-            {std::move(replicated_remove_key), std::move(remove_key_type), "remove_key"}};
+            {key_column, key_type, "key"},
+            {replicated_remove_key, remove_key_type, "remove_key"}};
 
         auto comparison = is_distinct_from_resolver->build(comparison_arguments);
         auto filter = comparison->execute(
@@ -889,7 +889,7 @@ NULLs are compared as values: a NULL removal key does not match a non-NULL key, 
     FunctionDocumentation::Syntax syntax_mapRemove = "mapRemove(map, key)";
     FunctionDocumentation::Arguments arguments_mapRemove = {
         {"map", "Map to remove matching entries from.", {"Map(K, V)"}},
-        {"key", "Key whose matching entries are removed.", {"K"}}
+        {"key", "Key whose matching entries are removed. Type must be comparable with the key type of the map.", {"Any"}}
     };
     FunctionDocumentation::ReturnedValue returned_value_mapRemove = {"Returns the map with all entries whose key does not match the specified key.", {"Map(K, V)"}};
     FunctionDocumentation::Examples examples_mapRemove = {
