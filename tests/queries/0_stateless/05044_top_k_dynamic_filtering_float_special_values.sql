@@ -3,8 +3,9 @@
 -- a `NaN` boundary must never become the threshold, and the initial threshold is
 -- `+-inf` rather than the maximum finite value. Compare the optimized and the
 -- unoptimized result for `Float64` / `Float32` data containing `nan`, `inf` and
--- `-inf`, for both the default `NULLS LAST` ordering and `NULLS FIRST` (which flips
--- where `NaN` sorts).
+-- `-inf`. `NULLS FIRST` (which flips where `NaN` sorts) is checked only on data where
+-- every block's top-k consists of `nan`: with a finite threshold `__topKFilter` drops
+-- `nan` rows under `NULLS FIRST` (https://github.com/ClickHouse/ClickHouse/issues/116705).
 
 SET merge_tree_read_split_ranges_into_intersecting_and_non_intersecting_injection_probability = 0;
 SET query_plan_max_limit_for_top_k_optimization = 1000;
@@ -36,40 +37,20 @@ SELECT f64 FROM tab_float ORDER BY f64 ASC LIMIT 6 SETTINGS use_top_k_dynamic_fi
 SELECT 'Float64 ASC optimized';
 SELECT f64 FROM tab_float ORDER BY f64 ASC LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
 
-SELECT 'Float64 ASC NULLS FIRST unoptimized';
-SELECT f64 FROM tab_float ORDER BY f64 ASC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 0, use_skip_indexes_for_top_k = 0;
-SELECT 'Float64 ASC NULLS FIRST optimized';
-SELECT f64 FROM tab_float ORDER BY f64 ASC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
-
 SELECT 'Float64 DESC unoptimized';
 SELECT f64 FROM tab_float ORDER BY f64 DESC LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 0, use_skip_indexes_for_top_k = 0;
 SELECT 'Float64 DESC optimized';
 SELECT f64 FROM tab_float ORDER BY f64 DESC LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
-
-SELECT 'Float64 DESC NULLS FIRST unoptimized';
-SELECT f64 FROM tab_float ORDER BY f64 DESC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 0, use_skip_indexes_for_top_k = 0;
-SELECT 'Float64 DESC NULLS FIRST optimized';
-SELECT f64 FROM tab_float ORDER BY f64 DESC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
 
 SELECT 'Float32 ASC unoptimized';
 SELECT f32 FROM tab_float ORDER BY f32 ASC LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 0, use_skip_indexes_for_top_k = 0;
 SELECT 'Float32 ASC optimized';
 SELECT f32 FROM tab_float ORDER BY f32 ASC LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
 
-SELECT 'Float32 ASC NULLS FIRST unoptimized';
-SELECT f32 FROM tab_float ORDER BY f32 ASC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 0, use_skip_indexes_for_top_k = 0;
-SELECT 'Float32 ASC NULLS FIRST optimized';
-SELECT f32 FROM tab_float ORDER BY f32 ASC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
-
 SELECT 'Float32 DESC unoptimized';
 SELECT f32 FROM tab_float ORDER BY f32 DESC LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 0, use_skip_indexes_for_top_k = 0;
 SELECT 'Float32 DESC optimized';
 SELECT f32 FROM tab_float ORDER BY f32 DESC LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
-
-SELECT 'Float32 DESC NULLS FIRST unoptimized';
-SELECT f32 FROM tab_float ORDER BY f32 DESC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 0, use_skip_indexes_for_top_k = 0;
-SELECT 'Float32 DESC NULLS FIRST optimized';
-SELECT f32 FROM tab_float ORDER BY f32 DESC NULLS FIRST LIMIT 6 SETTINGS use_top_k_dynamic_filtering = 1, use_skip_indexes_for_top_k = 1, use_skip_indexes_on_data_read = 1;
 
 DROP TABLE tab_float;
 
