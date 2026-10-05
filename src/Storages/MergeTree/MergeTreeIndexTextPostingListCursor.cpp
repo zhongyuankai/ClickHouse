@@ -728,26 +728,14 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
             if (block_idx != current_block || decoded_count == 0)
                 decodeBlock(block_idx);
 
-            chassert(index <= decoded_count);
-            const size_t value_begin = (index > 0 && decoded_values_ptr[index - 1] < row_offset) ? index : 0;
-
-            const auto * begin_it = gallopingLowerBound(
-                decoded_values_ptr + value_begin,
-                decoded_values_ptr + decoded_count,
-                static_cast<uint32_t>(row_offset));
-
-            const auto * end_it = findRowRangeEnd(begin_it, decoded_values_ptr + decoded_count, row_offset, num_rows);
-            size_t begin_idx = static_cast<size_t>(begin_it - decoded_values_ptr);
-            size_t end_idx = static_cast<size_t>(end_it - decoded_values_ptr);
-            index = end_idx;
+            const PostingsApplyWindow written = linearDecoded<op>(data, row_offset, num_rows);
 
             /// No doc_ids of this block fall into the window. The block has a doc_id >= row_offset (`block_last`),
             /// so that doc_id is past the window, and so is everything in the following blocks and segments.
-            if (begin_idx == end_idx)
+            if (written.empty())
                 return window;
 
-            padColumn<op>(data, decoded_values_ptr, row_offset, begin_idx, end_idx);
-            window.extend(decoded_values_ptr[begin_idx], static_cast<size_t>(decoded_values_ptr[end_idx - 1]) + 1);
+            window.extend(written.begin, written.end);
         }
     }
 
@@ -780,13 +768,19 @@ PostingsApplyWindow PostingListCursor::linearEmbedded(UInt8 * data, size_t row_o
         }
     }
 
+    return linearDecoded<op>(data, row_offset, num_rows);
+}
+
+template <PadOp op>
+PostingsApplyWindow PostingListCursor::linearDecoded(UInt8 * data, size_t row_offset, size_t num_rows)
+{
     /// The windows come in ascending order: resume the search from the read position when it still lies
     /// before the window, and leave it at the first doc_id past the window for the next scan.
     chassert(index <= decoded_count);
     const size_t search_from = (index > 0 && decoded_values_ptr[index - 1] < row_offset) ? index : 0;
-
     const auto * begin_it = gallopingLowerBound(decoded_values_ptr + search_from, decoded_values_ptr + decoded_count, static_cast<uint32_t>(row_offset));
     const auto * end_it = findRowRangeEnd(begin_it, decoded_values_ptr + decoded_count, row_offset, num_rows);
+
     size_t begin_idx = static_cast<size_t>(begin_it - decoded_values_ptr);
     size_t end_idx = static_cast<size_t>(end_it - decoded_values_ptr);
     index = end_idx;
