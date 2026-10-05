@@ -35,6 +35,12 @@ SELECT toTypeName(mapRemove(CAST(map('a', 'x', 'b', 'y'), 'Map(LowCardinality(St
 
 SELECT mapRemove(CAST(map('a', 'x', 'b', 'y'), 'Map(LowCardinality(String), LowCardinality(String))'), 'a') FORMAT TabSeparatedRaw;
 
+SELECT mapRemove(map(nan, 'nan', 1.5, 'one-five'), nan) = map(1.5, 'one-five') FORMAT TabSeparatedRaw;
+
+SELECT mapRemove(
+    map(tuple(nan, toUInt8(1)), 'nan', tuple(1.5, toUInt8(1)), 'one-five'),
+    tuple(nan, toUInt8(1))) = map(tuple(1.5, toUInt8(1)), 'one-five') FORMAT TabSeparatedRaw;
+
 SELECT mapRemove([1, 2], 1); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 SELECT mapRemove(map('a', 1)); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
 SELECT mapRemove(map('a', 1), [1, 2]); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT, NO_COMMON_TYPE }
