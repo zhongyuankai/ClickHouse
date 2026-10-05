@@ -18,6 +18,16 @@ user="${CLICKHOUSE_TEST_UNIQUE_NAME}_user"
 
 function cleanup()
 {
+    # A client killed inside attach_is_rejected leaves its table detached permanently, which DROP TABLE does not see.
+    for table in $(${CLICKHOUSE_CLIENT} --query "SELECT table FROM system.detached_tables
+        WHERE database = currentDatabase() AND table IN ('table_settings_override', 'table_alias_override')"); do
+        ${CLICKHOUSE_CLIENT} --multiquery --query "
+            SET ast_fuzzer_any_query = 0;
+            ALTER NAMED COLLECTION IF EXISTS $nc_mysql SET connection_pool_size = 2 OVERRIDABLE;
+            ALTER NAMED COLLECTION IF EXISTS $nc_url SET http_method = 'POST' OVERRIDABLE;
+            ATTACH TABLE $table;
+        "
+    done
     ${CLICKHOUSE_CLIENT} --multiquery --query "
         DROP DICTIONARY IF EXISTS dict_override;
         DROP DICTIONARY IF EXISTS dict_add_key;
