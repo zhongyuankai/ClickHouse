@@ -10,6 +10,7 @@
 namespace DB
 {
 
+#if CLICKHOUSE_CLOUD
 /// Connection params for reading the objects a lightweight snapshot references, built from the endpoint
 /// and object namespace its manifest records for the source disk. For Azure that namespace is `<container>`
 /// or `<container>/<prefix>` when the disk endpoint has a path below the container
@@ -23,6 +24,7 @@ namespace DB
 /// source disk) are dropped, and an endpoint recorded as a connection string is reduced to its service URL.
 AzureBlobStorage::ConnectionParams makeSnapshotSourceConnectionParams(
     const AzureBlobStorage::ConnectionParams & backup_connection_params, const String & endpoint, const String & blob_namespace);
+#endif
 
 /// Represents a backup stored to Azure
 class BackupReaderAzureBlobStorage : public BackupReaderDefault

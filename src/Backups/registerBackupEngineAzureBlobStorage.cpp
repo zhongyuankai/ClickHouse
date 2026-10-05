@@ -301,6 +301,7 @@ void registerBackupEngineAzureBlobStorage(BackupFactory & factory)
                 params.write_settings,
                 params.context);
 
+#if CLICKHOUSE_CLOUD
             auto snapshot_reader_creator = [&](const String & endpoint, const String & blob_namespace)
             {
                 return std::make_shared<BackupReaderAzureBlobStorage>(
@@ -313,6 +314,9 @@ void registerBackupEngineAzureBlobStorage(BackupFactory & factory)
             };
 
             return std::make_unique<BackupImpl>(params, archive_params, reader, snapshot_reader_creator);
+#else
+            return std::make_unique<BackupImpl>(params, archive_params, reader);
+#endif
         }
 
         auto writer = std::make_shared<BackupWriterAzureBlobStorage>(

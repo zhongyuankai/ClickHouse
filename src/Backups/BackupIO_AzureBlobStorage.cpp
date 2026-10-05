@@ -66,6 +66,7 @@ namespace
         };
     }
 
+#if CLICKHOUSE_CLOUD
     /// The recorded endpoint of a snapshot's source disk as a service URL: scheme, host, port and path, without
     /// query parameters and trailing slashes. A source disk that authenticates with a SAS records it in the
     /// query, and one configured with a connection string records the connection string itself; the snapshot
@@ -109,8 +110,10 @@ namespace
                 result += part + ";";
         return result + "BlobEndpoint=" + service_url;
     }
+#endif
 }
 
+#if CLICKHOUSE_CLOUD
 AzureBlobStorage::ConnectionParams makeSnapshotSourceConnectionParams(
     const AzureBlobStorage::ConnectionParams & backup_connection_params, const String & endpoint, const String & blob_namespace)
 {
@@ -136,6 +139,7 @@ AzureBlobStorage::ConnectionParams makeSnapshotSourceConnectionParams(
     connection_params.endpoint.container_already_exists = true;
     return connection_params;
 }
+#endif
 
 BackupReaderAzureBlobStorage::BackupReaderAzureBlobStorage(
     const AzureBlobStorage::ConnectionParams & connection_params_,
