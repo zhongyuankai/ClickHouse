@@ -245,7 +245,8 @@ The following settings are exposed in the console and the API. The defaults are 
 |---|---|---|---|
 | Type | both | - | `executable_pool` or `executable` |
 | Runtime type | both | - | `python3.11` or `Native` |
-| Format | both | `TabSeparated` | Any ClickHouse [input/output format](/reference/formats/index). Argument names are required for the `Native` and `JSONEachRow` formats. |
+| Format | both | `TabSeparated` | Any ClickHouse [input/output format](/reference/formats/index). Argument names and a return name are required for the `Native` and `JSONEachRow` formats. |
+| Return name | both | unset | Name of the returned value (`returnName` in the API, `return_name` in Terraform). Required for the `Native` and `JSONEachRow` formats, which carry the result name; optional otherwise. |
 | Pool size | `executable_pool` | 3 | Number of long-lived processes per replica. Not applicable to `executable`. |
 | Max command execution time (s) | `executable_pool` | 10 | Maximum time to process one block of data. Accepted for `executable` too, where it has no effect. |
 | Command read timeout (ms) | both | 10000 | Timeout reading from the command's stdout. |
@@ -441,7 +442,7 @@ resource "clickhouse_udf_attachment" "production" {
 }
 ```
 
-The `clickhouse_udf` resource also accepts `format`, `pool_size`, `max_command_execution_time`, `command_read_timeout`, `command_write_timeout`, `send_chunk_header`, `sandbox_type`, and `runtime`.
+Beyond the required attributes shown above, the `clickhouse_udf` resource accepts `format`, `pool_size`, `max_command_execution_time`, `command_read_timeout`, `command_write_timeout`, `send_chunk_header`, `sandbox_type`, `sandbox_version`, `return_name`, and `fail_on_build_error`; see the [resource documentation](https://github.com/ClickHouse/terraform-provider-clickhouse/blob/main/docs/resources/udf.md) for the full schema.
 
 To test a new version on a development service before it reaches production, let one attachment track the latest version and pin the other to a variable. The development attachment follows every new build automatically, while the production attachment moves only when you change `var.prod_udf_version`:
 
