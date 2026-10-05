@@ -37,17 +37,6 @@ instance_with_suites = cluster.add_instance(
     main_configs=[
         "configs/ssl_config.xml",
         "configs/ssl_config_tls13_suites.xml",
-        "certs/server-key.pem",
-        "certs/server-cert.pem",
-        "certs/ca-cert.pem",
-        "certs/dhparam4096.pem",
-    ],
-    user_configs=["configs/users_with_ssl_auth.xml"],
-)
-instance_with_client_suites = cluster.add_instance(
-    "node_with_client_cipher_suites",
-    main_configs=[
-        "configs/ssl_config.xml",
         "configs/ssl_config_tls13_client_suites.xml",
         "certs/server-key.pem",
         "certs/server-cert.pem",
@@ -320,18 +309,20 @@ def query_over_secure_native_port(node, target):
 
 
 def test_tls13_client_cipher_suites():
-    # A client that configures no suites has to reach the same target, or the refusal below
-    # would not be attributable to the client setting.
+    #  restricts its server side to one suite and its client side to
+    # another, so the same node serves as the restricted server and the restricted client.
+
+    # A client that configures no suites has to reach the restricted server, or the refusal
+    # below would not be attributable to the client setting.
     answer, error = query_over_secure_native_port(instance, instance_with_suites)
     assert answer.strip() == "1", error
 
     # The configured client still reaches a server that offers the suite it asks for.
-    answer, error = query_over_secure_native_port(instance_with_client_suites, instance)
+    answer, error = query_over_secure_native_port(instance_with_suites, instance)
     assert answer.strip() == "1", error
 
-    # It offers only that suite, so a server restricted to another one is out of reach.
-    answer, error = query_over_secure_native_port(
-        instance_with_client_suites, instance_with_suites
-    )
+    # It offers only that suite, so a server restricted to another one is out of reach,
+    # including its own.
+    answer, error = query_over_secure_native_port(instance_with_suites, instance_with_suites)
     assert answer.strip() != "1"
     assert "handshake failure" in error, error
