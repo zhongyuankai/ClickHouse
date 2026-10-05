@@ -713,14 +713,14 @@ bool FileSegment::reserve(
     if (!is_unbound && reserve_ahead)
     {
         /// Don't reserve ahead past the segment end or the end of the read.
-        size_t max_reserve_size = range().size() - reserved_size;
+        size_t segment_reserve_limit = range().size() - reserved_size;
         if (reserve_hint)
         {
             const size_t read_horizon = current_downloaded_size + *reserve_hint;
-            max_reserve_size = std::min(max_reserve_size, read_horizon > reserved_size ? read_horizon - reserved_size : 0);
+            segment_reserve_limit = std::min(segment_reserve_limit, read_horizon > reserved_size ? read_horizon - reserved_size : 0);
         }
 
-        size_to_reserve = reserve_ahead->getReserveSize(size_to_reserve, max_reserve_size, cache->getReserveGranularity());
+        size_to_reserve = reserve_ahead->getReserveSize(size_to_reserve, segment_reserve_limit, cache->getReserveGranularity());
     }
 
     /// This (resizable file segments) is allowed only for single threaded use of file segment.

@@ -27,14 +27,15 @@ class ReadBufferFromFileBase;
 struct FileCacheReserveStat;
 
 /// Reserve-ahead state of one reader/writer: the first reservation is exact, then the reserve-ahead
-/// doubles up to the cache's `reserve_granularity`. Reset on a failed reservation.
+/// doubles up to `max_reserve_granularity` (the cache's `reserve_granularity`). Reset on a failed reservation.
 struct FileCacheReserveAhead
 {
     /// Returns the size to reserve, at least `size_to_reserve`, and grows the reserve-ahead.
-    size_t getReserveSize(size_t size_to_reserve, size_t max_reserve_size, size_t limit)
+    /// `segment_reserve_limit` is the room left in the segment, capped by the end of the read if known.
+    size_t getReserveSize(size_t size_to_reserve, size_t segment_reserve_limit, size_t max_reserve_granularity)
     {
-        const size_t result = std::max(size_to_reserve, std::min({granularity, limit, max_reserve_size}));
-        granularity = std::min(limit, granularity ? granularity * 2 : size_to_reserve * 2);
+        const size_t result = std::max(size_to_reserve, std::min({granularity, max_reserve_granularity, segment_reserve_limit}));
+        granularity = std::min(max_reserve_granularity, granularity ? granularity * 2 : size_to_reserve * 2);
         return result;
     }
 
