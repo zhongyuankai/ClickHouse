@@ -330,6 +330,18 @@ public:
     /// Throws the real cancellation cause if the query has been cancelled. No-op if not attached to a query.
     void throwIfQueryCanceled() const;
 
+    /// While alive, `isQueryCanceled` returns false and `throwIfQueryCanceled` does nothing in the current thread.
+    /// For code that must not be interrupted, like the finalization of a committed transaction.
+    class QueryCancellationBlocker : private boost::noncopyable
+    {
+    public:
+        QueryCancellationBlocker();
+        ~QueryCancellationBlocker();
+
+    private:
+        bool previous;
+    };
+
     /// Proper cal for fatal_error_callback
     void onFatalError();
 
