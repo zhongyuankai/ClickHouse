@@ -725,7 +725,7 @@ public:
 
         auto remove_key_column = recursiveRemoveLowCardinality(arguments[1].column);
         auto remove_key_type = recursiveRemoveLowCardinality(arguments[1].type);
-        auto replicated_remove_key = remove_key_column->replicate(offsets);
+        auto replicated_remove_key = remove_key_column->replicate(offsets)->convertToFullColumnIfConst();
 
         const size_t map_elements_count = key_column->size();
         ColumnPtr filter;
