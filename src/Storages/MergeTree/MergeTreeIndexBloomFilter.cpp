@@ -889,23 +889,30 @@ static bool searchFunctionCoercesConstant(const DataTypePtr & value_type, const 
 /// the constant's raw padded bytes (arrayIndex.h `executeString`), so the padded form is the value
 /// to hash. The test must read the type before `getPrimitiveType` strips `LowCardinality`, whose
 /// elements do coerce.
+/// Over `Enum` values a `String` or `FixedString` constant is compared by the name of the enum value,
+/// after the cast of both arguments to their common type `String`, which strips the padding of a
+/// `FixedString` (arrayIndex.h `executeGeneric`, hasAllAny.h). Do the same, and return the value of the
+/// enum to hash. A name that is not in the `Enum` does not throw there, it does not match, so return a
+/// null `Field` for it: the caller declines the index instead of throwing `UNKNOWN_ELEMENT_OF_ENUM`
+/// while it is prepared. Returns `std::nullopt` when the constant is not a name of an enum value.
+static std::optional<Field> tryConvertEnumNameConstant(const Field & value_field, const DataTypePtr & value_type, const DataTypePtr & enum_type)
+{
+    if (!isEnum(enum_type) || value_field.getType() != Field::Types::String || !value_type
+        || !isStringOrFixedString(removeLowCardinalityAndNullable(value_type)))
+        return std::nullopt;
+
+    String name = value_field.safeGet<String>();
+    if (isFixedString(removeLowCardinalityAndNullable(value_type)))
+        name.resize(name.find_last_not_of('\0') + 1);
+
+    return tryConvertFieldToType(Field(std::move(name)), *enum_type, nullptr, {}, /* strict */ true);
+}
+
 static Field convertConstantForArrayIndexFunction(
     const Field & value_field, const DataTypePtr & value_type, const DataTypePtr & nested_type, const DataTypePtr & actual_type)
 {
-    /// Over `Enum` elements a `String` or `FixedString` constant is compared by the name of the enum value,
-    /// after the cast of both arguments to their common type `String`, which strips the padding of a
-    /// `FixedString` (arrayIndex.h `executeGeneric`). Do the same, and hash the value of the enum. A name
-    /// that is not in the `Enum` does not throw there, it does not match, so decline the index instead of
-    /// throwing `UNKNOWN_ELEMENT_OF_ENUM` while it is prepared.
-    if (isEnum(actual_type) && value_field.getType() == Field::Types::String && value_type
-        && isStringOrFixedString(removeLowCardinalityAndNullable(value_type)))
-    {
-        String name = value_field.safeGet<String>();
-        if (isFixedString(removeLowCardinalityAndNullable(value_type)))
-            name.resize(name.find_last_not_of('\0') + 1);
-
-        return tryConvertFieldToType(Field(std::move(name)), *actual_type, nullptr, {}, /* strict */ true);
-    }
+    if (auto enum_value = tryConvertEnumNameConstant(value_field, value_type, actual_type))
+        return std::move(*enum_value);
 
     if (WhichDataType(removeNullable(nested_type)).isString() || !searchFunctionCoercesConstant(value_type, actual_type))
         return convertFieldToType(value_field, *actual_type, value_type.get());
@@ -938,9 +945,19 @@ static ColumnPtr createColumnFromConstantArray(
         if ((f.isNull() && !is_nullable) || f.isDecimal(f.getType())) /// NOLINT(readability-static-accessed-through-instance)
             return nullptr;
 
-        Field converted = coerce
-            ? coerceStringFieldLikeSearchFunction(f, element_type, actual_type, /*cast_to_supertype=*/ true)
-            : convertFieldToType(f, *actual_type, element_type.get());
+        /// `hasAny`/`hasAll` compare a `String` or `FixedString` constant with `Enum` elements by the name
+        /// of the enum value, see `tryConvertEnumNameConstant`.
+        std::optional<Field> enum_value;
+        if (coerce_like_search_function)
+            enum_value = tryConvertEnumNameConstant(f, element_type, actual_type);
+
+        Field converted;
+        if (enum_value)
+            converted = std::move(*enum_value);
+        else if (coerce)
+            converted = coerceStringFieldLikeSearchFunction(f, element_type, actual_type, /*cast_to_supertype=*/ true);
+        else
+            converted = convertFieldToType(f, *actual_type, element_type.get());
         if (converted.isNull())
             return nullptr;
 
@@ -1300,6 +1317,27 @@ bool MergeTreeIndexConditionBloomFilter::traverseTreeEquals(
             if (value_field == value_type->getDefault())
                 return false;
 
+            /// Over `Enum` map values the constant can be the name of the enum value, a `String`, which has
+            /// to be converted to the value of the enum before it is hashed and compared with the default.
+            /// The default value of an `Enum` is not the default value of the type of the constant. For a
+            /// missing key `arrayElement` returns the zero of the underlying integer, which is not necessarily
+            /// the default value of the `Enum` (its first value), so decline the index for both.
+            Field map_value_field = value_field;
+            if (const auto * dag_node = key_node.getDAGNode())
+            {
+                const DataTypePtr map_value_type = removeLowCardinalityAndNullable(dag_node->result_type);
+                if (isEnum(map_value_type))
+                {
+                    if (auto enum_value = tryConvertEnumNameConstant(value_field, value_type, map_value_type))
+                        map_value_field = std::move(*enum_value);
+                    else
+                        map_value_field = tryConvertFieldToType(value_field, *map_value_type, value_type.get(), {}, /* strict */ true);
+
+                    if (map_value_field.isNull() || map_value_field == Field(Int64(0)) || map_value_field == map_value_type->getDefault())
+                        return false;
+                }
+            }
+
             size_t position = 0;
             Field const_value;
 
@@ -1311,7 +1349,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseTreeEquals(
             else if (map_info->has_values_index)
             {
                 position = map_info->values_index_position;
-                const_value = value_field;
+                const_value = map_value_field;
             }
             else
             {

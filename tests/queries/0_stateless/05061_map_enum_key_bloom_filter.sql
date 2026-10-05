@@ -86,3 +86,35 @@ SELECT id FROM t_map_enum_bf_values WHERE m['a'] = 10 ORDER BY id;
 SELECT id FROM t_map_enum_bf_values WHERE m['b'] = 20 ORDER BY id;
 
 DROP TABLE t_map_enum_bf_values;
+
+-- A `mapValues` index over `Enum` values: the constant can be the name of the enum value, a `String`.
+-- It has to be converted to the value of the enum before it is hashed. For a missing key `arrayElement`
+-- returns the zero of the underlying integer, which matches the name of the enum value 0, so the index
+-- cannot be used for it.
+DROP TABLE IF EXISTS t_map_enum_values_bf;
+
+CREATE TABLE t_map_enum_values_bf
+(
+    id UInt64,
+    m Map(String, Enum8('z' = 0, 'a' = 1, 'b' = 2, 'c' = 3)),
+    INDEX idx_values mapValues(m) TYPE bloom_filter GRANULARITY 1
+)
+ENGINE = MergeTree ORDER BY id SETTINGS index_granularity = 1;
+
+INSERT INTO t_map_enum_values_bf VALUES (1, map('k', 'b')), (2, map('k', 'c')), (3, map('x', 'b'));
+
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 'b' ORDER BY id;
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 'z' ORDER BY id;
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 'a' ORDER BY id;
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 1 ORDER BY id;
+
+-- The same without the index: the results must agree.
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 'b' ORDER BY id SETTINGS use_skip_indexes = 0;
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 'z' ORDER BY id SETTINGS use_skip_indexes = 0;
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 'a' ORDER BY id SETTINGS use_skip_indexes = 0;
+SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 1 ORDER BY id SETTINGS use_skip_indexes = 0;
+
+-- The index is used and prunes the granules that do not have the value.
+SELECT replaceRegexpOne(explain, '^[^A-Za-z]*', '') FROM (EXPLAIN indexes = 1 SELECT id FROM t_map_enum_values_bf WHERE m['k'] = 'c') WHERE explain LIKE '%Name:%' OR explain LIKE '%Granules:%';
+
+DROP TABLE t_map_enum_values_bf;

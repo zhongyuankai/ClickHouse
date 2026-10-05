@@ -89,3 +89,34 @@ SELECT id FROM t_has_wide_enum_bf WHERE hasAll(fa, CAST(['ab'], 'Array(Enum8(\'a
 SELECT replaceRegexpOne(explain, '^[^A-Za-z]*', '') FROM (EXPLAIN indexes = 1 SELECT id FROM t_has_wide_enum_bf WHERE has(CAST(['a'], 'Array(Enum8(\'a\' = 1, \'b\' = 2))'), f)) WHERE explain LIKE '%Name:%' OR explain LIKE '%Granules:%';
 
 DROP TABLE t_has_wide_enum_bf;
+
+-- `hasAny`/`hasAll` over an indexed `Array(Enum)` with a constant `Array(String)` or `Array(FixedString)`
+-- compare by the name of the enum value, stripping the padding of a `FixedString`. The index has to
+-- hash the value of the enum, and decline a name that is not in the `Enum` instead of throwing.
+DROP TABLE IF EXISTS t_has_any_enum_column_bf;
+
+CREATE TABLE t_has_any_enum_column_bf
+(
+    id UInt64,
+    e Array(Enum8('a' = 1, 'b' = 2)),
+    INDEX idx_e e TYPE bloom_filter GRANULARITY 1
+)
+ENGINE = MergeTree ORDER BY id SETTINGS index_granularity = 1;
+
+INSERT INTO t_has_any_enum_column_bf VALUES (1, ['a']), (2, ['b']);
+
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAny(e, [toFixedString('a', 2)]) ORDER BY id;
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAll(e, [toFixedString('b', 2)]) ORDER BY id;
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAny(e, ['a']) ORDER BY id;
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAny(e, ['zz']) ORDER BY id;
+
+-- The same without the index: the results must agree.
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAny(e, [toFixedString('a', 2)]) ORDER BY id SETTINGS use_skip_indexes = 0;
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAll(e, [toFixedString('b', 2)]) ORDER BY id SETTINGS use_skip_indexes = 0;
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAny(e, ['a']) ORDER BY id SETTINGS use_skip_indexes = 0;
+SELECT id FROM t_has_any_enum_column_bf WHERE hasAny(e, ['zz']) ORDER BY id SETTINGS use_skip_indexes = 0;
+
+-- The index is used and prunes the granules that do not have the value.
+SELECT replaceRegexpOne(explain, '^[^A-Za-z]*', '') FROM (EXPLAIN indexes = 1 SELECT id FROM t_has_any_enum_column_bf WHERE hasAny(e, [toFixedString('a', 2)])) WHERE explain LIKE '%Name:%' OR explain LIKE '%Granules:%';
+
+DROP TABLE t_has_any_enum_column_bf;
