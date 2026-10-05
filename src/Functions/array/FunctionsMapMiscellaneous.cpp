@@ -677,9 +677,14 @@ class FunctionMapRemove final : public IFunction
 public:
     static constexpr auto name = "mapRemove";
 
-    static FunctionPtr create(ContextPtr)
+    static FunctionPtr create(ContextPtr context)
     {
-        return std::make_shared<FunctionMapRemove>();
+        return std::make_shared<FunctionMapRemove>(context);
+    }
+
+    explicit FunctionMapRemove(const ContextPtr & context)
+        : is_distinct_from_resolver(FunctionFactory::instance().get("isDistinctFrom", context))
+    {
     }
 
     String getName() const override { return name; }
@@ -697,9 +702,11 @@ public:
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "First argument for function {} must be a Map, found {}", getName(), arguments[0]->getName());
 
-        getLeastSupertype(DataTypes{
-            recursiveRemoveLowCardinality(map_type->getKeyType()),
-            recursiveRemoveLowCardinality(arguments[1])});
+        const auto key_type = recursiveRemoveLowCardinality(map_type->getKeyType());
+        const auto remove_key_type = recursiveRemoveLowCardinality(arguments[1]);
+        is_distinct_from_resolver->getReturnType({
+            {nullptr, key_type, "key"},
+            {nullptr, remove_key_type, "remove_key"}});
         return arguments[0];
     }
 
@@ -721,20 +728,39 @@ public:
         auto remove_key_type = recursiveRemoveLowCardinality(arguments[1].type);
         auto replicated_remove_key = remove_key_column->replicate(offsets);
 
-        const auto comparison_type = getLeastSupertype(DataTypes{key_type, remove_key_type});
-        key_column = castColumn(ColumnWithTypeAndName{key_column, key_type, "key"}, comparison_type);
-        replicated_remove_key = castColumn(
-            ColumnWithTypeAndName{replicated_remove_key, remove_key_type, "remove_key"}, comparison_type);
-
         const size_t map_elements_count = key_column->size();
-        auto filter = ColumnUInt8::create(map_elements_count);
-        auto & filter_data = filter->getData();
-        for (size_t i = 0; i < map_elements_count; ++i)
-            filter_data[i] = static_cast<UInt8>(!mapKeyEquals(*key_column, i, *replicated_remove_key, i));
+        ColumnPtr filter;
+
+        if (const auto comparison_type = tryGetLeastSupertype(DataTypes{key_type, remove_key_type}))
+        {
+            key_column = castColumn(ColumnWithTypeAndName{key_column, key_type, "key"}, comparison_type);
+            replicated_remove_key = castColumn(
+                ColumnWithTypeAndName{replicated_remove_key, remove_key_type, "remove_key"}, comparison_type);
+
+            auto keep = ColumnUInt8::create(map_elements_count);
+            auto & keep_data = keep->getData();
+            for (size_t i = 0; i < map_elements_count; ++i)
+                keep_data[i] = static_cast<UInt8>(!mapKeyEquals(*key_column, i, *replicated_remove_key, i));
+            filter = std::move(keep);
+        }
+        else
+        {
+            /// Preserve comparison support for types such as mixed signed/unsigned arrays, where
+            /// FunctionComparison has a dedicated path even though no least supertype exists.
+            ColumnsWithTypeAndName comparison_arguments{
+                {key_column, key_type, "key"},
+                {replicated_remove_key, remove_key_type, "remove_key"}};
+            auto comparison = is_distinct_from_resolver->build(comparison_arguments);
+            filter = comparison->execute(
+                comparison_arguments, comparison->getResultType(), map_elements_count, /* dry_run = */ false);
+        }
 
         auto filtered_nested_map = ArrayFilterImpl::execute(nested_map, std::move(filter));
         return ColumnMap::create(std::move(filtered_nested_map));
     }
+
+private:
+    FunctionOverloadResolverPtr is_distinct_from_resolver;
 };
 
 REGISTER_FUNCTION(MapMiscellaneous)
@@ -880,6 +906,7 @@ Filters a map by applying a function to each map element.
     FunctionDocumentation::Description description_mapRemove = R"(
 Removes all entries from a map whose key equals the specified key. If several entries have the same key, all matching entries are removed.
 NULLs are compared as values: a NULL removal key does not match a non-NULL key, and NULL components in composite keys match other NULL components.
+NaN keys follow map lookup semantics, so a NaN removal key matches a NaN map key.
 )";
     FunctionDocumentation::Syntax syntax_mapRemove = "mapRemove(map, key)";
     FunctionDocumentation::Arguments arguments_mapRemove = {
