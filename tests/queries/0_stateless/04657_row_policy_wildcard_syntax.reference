@@ -21,7 +21,7 @@ SYNTAX_ERROR
 SYNTAX_ERROR
 SYNTAX_ERROR
 SYNTAX_ERROR
--- invalid: bare dot must not shrink to the current database
+-- invalid: *.* must not shrink to the current database
 SYNTAX_ERROR
 SYNTAX_ERROR
 SYNTAX_ERROR
