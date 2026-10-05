@@ -64,7 +64,7 @@ private:
 
     /// Returns combined postings per column for the given mark, clipped to `slice_range`
     /// (the actual read window, which may be narrower than the mark on partial-mark reads).
-    std::vector<PostingList> buildPostingsForMark(size_t mark, const RowsRange & slice_range, PostingList & range_posting);
+    std::vector<PostingList> buildPostingsForMark(size_t mark, const RowsRange & slice_range);
     /// Returns combined posting list for a single query by taking the prebuilt
     /// postings from the analyzer and reading large postings blocks as needed.
     PostingList buildPostingsForQuery(const TextSearchQuery & query, const TextIndexAnalyzer & analyzer, const RowsRange & range, PostingList & range_posting);
@@ -82,27 +82,14 @@ private:
     /// Sets per-column flags from the analyzer's verdict.
     void classifyVirtualColumns();
     void fillColumn(IColumn & column, const PostingList & postings, size_t row_offset, size_t num_rows);
-    void fillColumnLazy(IColumn & column, size_t column_idx, size_t row_offset, size_t num_rows, PostingList & range_posting);
+    void fillColumnLazy(IColumn & column, size_t column_idx, size_t row_offset, size_t num_rows);
 
-    /// Search of one column resolved once per part, since none of it depends on the granule.
-    /// Non-owning: the cursors belong to `lazy_cursors`, `direct_postings` to the analyzer.
+    /// Search of one column resolved once per part.
     struct ResolvedSearch
     {
-        enum class Kind : uint8_t
-        {
-            /// No row matches.
-            Zeros,
-            /// Only analyzer-folded postings: fill from `direct_postings` clipped to the granule.
-            DirectPostings,
-            /// Union (`Any`) or intersection (`All`) of `cursors`.
-            Cursors,
-        };
-
-        Kind kind = Kind::Zeros;
         std::vector<PostingListCursor *> cursors;
         TextSearchMode mode = TextSearchMode::Any;
         TextIndexPostingsIntersectionAlgorithm intersection_algorithm = TextIndexPostingsIntersectionAlgorithm::Leapfrog;
-        const PostingList * direct_postings = nullptr;
     };
 
     /// Also creates the cursors of the column in `lazy_cursors`.

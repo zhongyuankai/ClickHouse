@@ -198,10 +198,6 @@ private:
 using PostingListCursorPtr = std::shared_ptr<PostingListCursor>;
 using PostingListCursorMap = absl::flat_hash_map<std::string_view, PostingListCursorPtr>;
 
-/// Posting-list doc IDs are 32-bit, so `row_offset > UInt32::max` cannot legitimately occur.
-/// Throw a `LOGICAL_ERROR` rather than wrap the offset and corrupt the output column.
-void requireRowOffsetRepresentable(size_t row_offset);
-
 /// Sorts the cursors for `lazyUnionPostingLists` by descending density, so the densest cursor fills the output first.
 void sortCursorsForUnion(std::vector<PostingListCursor *> & cursors);
 

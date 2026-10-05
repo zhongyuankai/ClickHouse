@@ -498,11 +498,10 @@ size_t MergeTreeReaderTextIndex::readRows(
         size_t rows_to_read = std::min(rows_left_in_mark, max_rows_to_read - read_rows);
 
         /// In lazy mode skip per-mark Roaring Bitmap materialization — cursors decode on demand.
-        PostingList range_posting;
         std::vector<PostingList> mark_postings;
 
         if (!use_lazy_mode)
-            mark_postings = buildPostingsForMark(from_mark, RowsRange(from_row, from_row + rows_to_read - 1), range_posting);
+            mark_postings = buildPostingsForMark(from_mark, RowsRange(from_row, from_row + rows_to_read - 1));
 
         for (size_t i = 0; i < res_columns.size(); ++i)
         {
@@ -530,7 +529,7 @@ size_t MergeTreeReaderTextIndex::readRows(
             }
             else if (use_lazy_mode)
             {
-                fillColumnLazy(column_mutable, i, from_row, rows_to_read, range_posting);
+                fillColumnLazy(column_mutable, i, from_row, rows_to_read);
             }
             else
             {
@@ -603,7 +602,7 @@ std::optional<RowsRange> MergeTreeReaderTextIndex::getRowsRangeForMark(size_t ma
     return RowsRange(row_begin, row_end - 1);
 }
 
-std::vector<PostingList> MergeTreeReaderTextIndex::buildPostingsForMark(size_t mark, const RowsRange & slice_range, PostingList & range_posting)
+std::vector<PostingList> MergeTreeReaderTextIndex::buildPostingsForMark(size_t mark, const RowsRange & slice_range)
 {
     std::vector<PostingList> result(columns_to_read.size());
     auto mark_range = getRowsRangeForMark(mark);
@@ -618,6 +617,7 @@ std::vector<PostingList> MergeTreeReaderTextIndex::buildPostingsForMark(size_t m
         return result;
 
     const auto & analyzer = granule->getAnalyzer();
+    PostingList range_posting;
     range_posting.addRangeClosed(static_cast<UInt32>(effective_range->begin), static_cast<UInt32>(effective_range->end));
 
     for (size_t i = 0; i < columns_to_read.size(); ++i)
@@ -659,7 +659,6 @@ PostingList MergeTreeReaderTextIndex::buildPostingsForQuery(
 
     for (const auto & [token, token_info] : query_builder.tokens)
     {
-        /// Skip tokens no longer needed and tokens whose postings the analysis has already folded into `query_builder.postings`.
         if (!analyzer.isTokenNeeded(token) || analyzer.hasReadPostings(token))
             continue;
 
@@ -806,14 +805,6 @@ MergeTreeReaderTextIndex::ResolvedSearch MergeTreeReaderTextIndex::resolveSearch
 
     if (query_builder.postings && !query_builder.postings->isEmpty())
     {
-        /// No cursors for large postings: fill the column directly from the postings.
-        if (resolved.cursors.empty())
-        {
-            resolved.kind = ResolvedSearch::Kind::DirectPostings;
-            resolved.direct_postings = &*query_builder.postings;
-            return resolved;
-        }
-
         /// Build a cursor over the sorted array of postings, shared by all readers of the granule.
         auto cursor = std::make_shared<PostingListCursor>(query_builder.getFlatPostings());
         resolved.cursors.emplace_back(cursor.get());
@@ -823,7 +814,6 @@ MergeTreeReaderTextIndex::ResolvedSearch MergeTreeReaderTextIndex::resolveSearch
     if (resolved.cursors.empty())
         return resolved;
 
-    resolved.kind = ResolvedSearch::Kind::Cursors;
     resolved.mode = search_query->getSearchMode();
 
     if (resolved.mode == TextSearchMode::Any)
@@ -843,7 +833,7 @@ MergeTreeReaderTextIndex::ResolvedSearch MergeTreeReaderTextIndex::resolveSearch
     return resolved;
 }
 
-void MergeTreeReaderTextIndex::fillColumnLazy(IColumn & column, size_t column_idx, size_t row_offset, size_t num_rows, PostingList & range_posting)
+void MergeTreeReaderTextIndex::fillColumnLazy(IColumn & column, size_t column_idx, size_t row_offset, size_t num_rows)
 {
     auto & column_data = assert_cast<ColumnUInt8 &>(column).getData();
     size_t old_size = column_data.size();
@@ -852,24 +842,9 @@ void MergeTreeReaderTextIndex::fillColumnLazy(IColumn & column, size_t column_id
     if (!resolved.has_value())
         resolved = resolveSearch(column_idx);
 
-    if (resolved->kind == ResolvedSearch::Kind::DirectPostings)
-    {
-        /// Clip the analyzer-folded postings to the rows of this granule.
-        if (range_posting.isEmpty())
-        {
-            requireRowOffsetRepresentable(row_offset);
-            auto range_end = static_cast<UInt32>(std::min<size_t>(row_offset + num_rows - 1, std::numeric_limits<UInt32>::max()));
-            range_posting.addRangeClosed(static_cast<UInt32>(row_offset), range_end);
-        }
-
-        PostingList clipped = *resolved->direct_postings & range_posting;
-        fillColumn(column, clipped, row_offset, num_rows);
-        return;
-    }
-
     column_data.resize_fill(old_size + num_rows, 0);
 
-    if (resolved->kind == ResolvedSearch::Kind::Zeros)
+    if (resolved->cursors.empty())
         return;
 
     if (resolved->mode == TextSearchMode::Any)
