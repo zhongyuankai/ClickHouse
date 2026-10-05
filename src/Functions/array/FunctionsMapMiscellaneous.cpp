@@ -725,7 +725,7 @@ public:
 
         auto remove_key_column = recursiveRemoveLowCardinality(arguments[1].column);
         auto remove_key_type = recursiveRemoveLowCardinality(arguments[1].type);
-        auto replicated_remove_key = remove_key_column->replicate(offsets)->convertToFullColumnIfConst();
+        auto replicated_remove_key = remove_key_column->replicate(offsets);
 
         const size_t map_elements_count = key_column->size();
         ColumnPtr filter;
@@ -738,8 +738,19 @@ public:
 
             auto keep = ColumnUInt8::create(map_elements_count);
             auto & keep_data = keep->getData();
-            for (size_t i = 0; i < map_elements_count; ++i)
-                keep_data[i] = static_cast<UInt8>(key_column->compareAt(i, i, *replicated_remove_key, 1) != 0);
+
+            if (const auto * const_remove_key = checkAndGetColumn<ColumnConst>(replicated_remove_key.get()))
+            {
+                const auto & remove_key_data = const_remove_key->getDataColumn();
+                for (size_t i = 0; i < map_elements_count; ++i)
+                    keep_data[i] = static_cast<UInt8>(key_column->compareAt(i, 0, remove_key_data, 1) != 0);
+            }
+            else
+            {
+                for (size_t i = 0; i < map_elements_count; ++i)
+                    keep_data[i] = static_cast<UInt8>(key_column->compareAt(i, i, *replicated_remove_key, 1) != 0);
+            }
+
             filter = std::move(keep);
         }
         else
