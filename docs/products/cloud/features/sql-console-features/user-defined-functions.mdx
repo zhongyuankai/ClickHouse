@@ -216,6 +216,8 @@ Statically linked binaries are strongly recommended: they do not depend on the h
 Files in the architecture folder are deployed next to the binary, but the process does not start in that directory. Resolve them relative to the executable's own path, never relative to the working directory: in Go use `filepath.Dir(os.Args[0])` or `os.Executable()`, in Rust use `std::env::current_exe()`. If a required file is missing, write a message to stderr and exit non-zero rather than falling back silently.
 </Warning>
 
+Native UDFs cannot be network-enabled; outbound network access is available for the Python runtime only. See [Network access](#network-access).
+
 Build the binary for both architectures. In Rust, add both targets once, then build each:
 
 ```bash
@@ -251,7 +253,7 @@ The following settings are exposed in the console and the API. The defaults are 
 | Send chunk header | both | false | Sends the row count before each chunk. See [Formats and chunk headers](#formats-and-chunk-headers). |
 | Deterministic | both | false | Lets the query cache store results of queries that call this function. See [Deterministic functions and the query cache](#deterministic-functions-and-the-query-cache). |
 | Memory limit (MiB) | both | sandbox default | Maximum memory per sandbox process. See [Memory limit](#memory-limit). |
-| Network access | both | `basic` in the API | Outbound connections to public endpoints, selected by `sandboxType` in the API; not a console setting. Python UDFs created in the console are built with it enabled. See [Network access](#network-access). |
+| Network access | Python runtime | enabled | Outbound connections to public endpoints. Python UDFs created in the console are always built with it enabled; in the API and Terraform, `sandboxType` chooses `netenable` or `basic`. Native UDFs cannot be network-enabled. See [Network access](#network-access). |
 
 The following open-source settings are managed by ClickHouse Cloud and cannot be changed per UDF: `command_termination_timeout`, `lifetime`, `stderr_reaction`, `check_exit_code`, and `execute_direct`. The open-source default for `pool_size` is 16, whereas the Cloud default is 3. The full open-source list is in [Executable user-defined functions](/reference/functions/regular-functions/udf#executable-user-defined-functions).
 
@@ -265,7 +267,7 @@ With **Send chunk header** on, ClickHouse writes the number of rows as decimal t
 
 ### Network access {#network-access}
 
-UDFs created in the console with the `python3.11` runtime are built with network access enabled; there is no console setting for it. In the API, `sandboxType` selects the sandbox: the default `basic` has no network access, and `netenable` allows outbound connections. The Terraform provider exposes the same choice as `sandbox_type`.
+Network access is available for the Python runtime only; Native UDFs cannot be network-enabled. Python UDFs created in the console are built with network access enabled, and there is no console setting for it. In the API, `sandboxType` chooses between `netenable`, which allows outbound connections, and `basic`, which does not; the Terraform provider exposes the same choice as `sandbox_type`.
 
 Network access allows outbound connections to public internet endpoints. Connections to private networks, link-local addresses, and internal addresses are blocked. The sandbox has no cloud identity: no instance role, no metadata endpoint, and no inherited environment variables, so a UDF only has the credentials you give it. Network access is applied when a UDF version is built, so an existing version created without it needs a new version.
 
@@ -375,7 +377,7 @@ The request fields that select the capabilities described above are:
 | Request field | Values | Selects |
 |---|---|---|
 | [`runtime`](/products/cloud/api-reference/udf/udf-create) | `python3.11` or `native` | [Runtime type](#native-runtime) |
-| [`sandboxType`](/products/cloud/api-reference/udf/udf-create) | `basic` (API default, no network access) or `netenable` | [Network access](#network-access) |
+| [`sandboxType`](/products/cloud/api-reference/udf/udf-create) | `netenable` or `basic`; Python runtime only | [Network access](#network-access) |
 | [`memoryLimitMib`](/products/cloud/api-reference/udf/udf-create) | integer, or null for the sandbox default | [Memory limit](#memory-limit) |
 | [`deterministic`](/products/cloud/api-reference/udf/udf-create) | `true` or `false` (default) | [Deterministic](#deterministic-functions-and-the-query-cache) |
 | [`sendChunkHeader`](/products/cloud/api-reference/udf/udf-create) | `true` or `false` (default) | [Chunk headers](#formats-and-chunk-headers) |
