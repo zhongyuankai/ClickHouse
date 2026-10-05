@@ -47,6 +47,7 @@ IMergeTreeReader::IMergeTreeReader(
     const StorageSnapshotPtr & storage_snapshot_,
     const MergeTreeSettingsPtr & storage_settings_,
     UncompressedCache * uncompressed_cache_,
+    ColumnsCache * columns_cache_,
     MarkCache * mark_cache_,
     const MarkRanges & all_mark_ranges_,
     const MergeTreeReaderSettings & settings_,
@@ -57,6 +58,7 @@ IMergeTreeReader::IMergeTreeReader(
         ? data_part_info_for_read->getColumnsDescriptionWithCollectedNested()
         : data_part_info_for_read->getColumnsDescription())
     , uncompressed_cache(uncompressed_cache_)
+    , columns_cache(columns_cache_)
     , mark_cache(mark_cache_)
     , settings(settings_)
     , storage_settings(storage_settings_)
@@ -685,6 +687,7 @@ MergeTreeReaderPtr createMergeTreeReaderCompact(
     const MarkRanges & mark_ranges,
     const VirtualFields & virtual_fields,
     UncompressedCache * uncompressed_cache,
+    ColumnsCache * columns_cache,
     MarkCache * mark_cache,
     DeserializationPrefixesCache * deserialization_prefixes_cache,
     const MergeTreeReaderSettings & reader_settings,
@@ -699,6 +702,7 @@ MergeTreeReaderPtr createMergeTreeReaderWide(
     const MarkRanges & mark_ranges,
     const VirtualFields & virtual_fields,
     UncompressedCache * uncompressed_cache,
+    ColumnsCache * columns_cache,
     MarkCache * mark_cache,
     DeserializationPrefixesCache * deserialization_prefixes_cache,
     const MergeTreeReaderSettings & reader_settings,
@@ -713,6 +717,7 @@ MergeTreeReaderPtr createMergeTreeReader(
     const MarkRanges & mark_ranges,
     const VirtualFields & virtual_fields,
     UncompressedCache * uncompressed_cache,
+    ColumnsCache * columns_cache,
     MarkCache * mark_cache,
     DeserializationPrefixesCache * deserialization_prefixes_cache,
     const MergeTreeReaderSettings & reader_settings,
@@ -728,6 +733,7 @@ MergeTreeReaderPtr createMergeTreeReader(
             mark_ranges,
             virtual_fields,
             uncompressed_cache,
+            columns_cache,
             mark_cache,
             deserialization_prefixes_cache,
             reader_settings,
@@ -743,6 +749,7 @@ MergeTreeReaderPtr createMergeTreeReader(
             mark_ranges,
             virtual_fields,
             uncompressed_cache,
+            columns_cache,
             mark_cache,
             deserialization_prefixes_cache,
             reader_settings,
