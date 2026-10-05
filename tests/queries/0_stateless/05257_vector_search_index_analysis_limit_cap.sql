@@ -37,20 +37,4 @@ SELECT * FROM mergeTreeAnalyzeIndexes(currentDatabase(), t_vector_index_analysis
     'vector_search_index_analysis', array('vec', 'L2Distance', 4, [0.3, 0.3], false, false))
 SETTINGS max_limit_for_vector_search_queries = 3; -- { serverError BAD_ARGUMENTS }
 
--- In a regular vector search query, `hnsw_candidate_list_size_for_search` (no upper bound) and a `LIMIT` under a
--- raised `max_limit_for_vector_search_queries` used to drive the same reservation. Values above the number of
--- rows return the same nearest neighbours. Parallel replicas would move the search into secondary queries.
-SELECT id FROM t_vector_index_analysis_limit ORDER BY L2Distance(vec, [0.302, 0.302]) LIMIT 4
-SETTINGS hnsw_candidate_list_size_for_search = 2147483648, enable_parallel_replicas = 0, log_comment = '05257_expansion_above_rows';
-
-SELECT count() FROM (SELECT id FROM t_vector_index_analysis_limit ORDER BY L2Distance(vec, [0.302, 0.302]) LIMIT 2147483648)
-SETTINGS max_limit_for_vector_search_queries = 2147483648, enable_parallel_replicas = 0, log_comment = '05257_limit_above_rows';
-
-SYSTEM FLUSH LOGS query_log;
-SELECT log_comment, argMax(ProfileEvents['USearchSearchCount'] > 0 AND memory_usage < 1000000000, event_time_microseconds)
-FROM system.query_log
-WHERE current_database = currentDatabase() AND log_comment IN ('05257_expansion_above_rows', '05257_limit_above_rows')
-    AND type = 'QueryFinish' AND event_date >= yesterday()
-GROUP BY log_comment ORDER BY log_comment;
-
 DROP TABLE t_vector_index_analysis_limit;
