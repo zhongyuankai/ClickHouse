@@ -46,14 +46,14 @@ INSERT INTO test_probe SELECT number FROM numbers(5);
 SELECT a, s, arr, m, variantType(v), toString(v), lc
 FROM test_probe LEFT JOIN test_payload USING (a)
 ORDER BY a, s
-SETTINGS join_algorithm = 'hash', allow_experimental_join_right_table_sorting = 1,
+SETTINGS join_algorithm = 'hash', allow_join_right_table_sorting = 1,
     join_to_sort_minimum_perkey_rows = 2, join_to_sort_maximum_table_rows = 10000,
     query_plan_join_swap_table = 0, join_use_nulls = 0, joined_block_split_single_row = 0,
     join_output_by_rowlist_perkey_rows_threshold = 1000000;
 
 SELECT 'reranged', count(), sum(cityHash64(a, s, arr, m, toString(v), lc))
 FROM test_probe LEFT JOIN test_payload USING (a)
-SETTINGS join_algorithm = 'hash', allow_experimental_join_right_table_sorting = 1,
+SETTINGS join_algorithm = 'hash', allow_join_right_table_sorting = 1,
     join_to_sort_minimum_perkey_rows = 2, join_to_sort_maximum_table_rows = 10000,
     query_plan_join_swap_table = 0, join_use_nulls = 0, joined_block_split_single_row = 0,
     join_output_by_rowlist_perkey_rows_threshold = 1000000;
