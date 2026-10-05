@@ -302,9 +302,12 @@ def query_over_secure_native_port(node, target):
 
     `remoteSecure` connects through a `Poco::Net::SecureStreamSocket`, which takes the default
     client context, so the suites offered are the ones `openSSL.client` configures on `node`.
+    `prefer_localhost_replica = 0` makes a node that dials itself connect over TLS instead of
+    running the query locally.
     """
     return node.query_and_get_answer_with_error(
-        f"SELECT 1 FROM remoteSecure('{target.name}:{SECURE_NATIVE_PORT}', system.one)"
+        f"SELECT 1 FROM remoteSecure('{target.name}:{SECURE_NATIVE_PORT}', system.one) "
+        "SETTINGS prefer_localhost_replica = 0"
     )
 
 
