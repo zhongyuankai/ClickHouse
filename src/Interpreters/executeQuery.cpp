@@ -3383,9 +3383,7 @@ static BlockIO executeQueryImpl(
 
                 if (query_pipeline.initialized())
                 {
-                    /// The query may have failed because of its own memory limit, and its pipeline still holds the memory.
-                    /// Throwing `MEMORY_LIMIT_EXCEEDED` again here would replace the original exception and skip the
-                    /// pipeline reset in `BlockIO::onException`. The server-wide and per-user limits still apply.
+                    /// The query may have failed with MEMORY_LIMIT_EXCEEDED, try to preserve original exception
                     LockMemoryExceptionInThread lock_memory_tracker(VariableContext::Process);
                     logProcessorProfile(context, query_pipeline.getProcessors(), elem.exception_code, elem.exception);
                 }

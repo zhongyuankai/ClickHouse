@@ -531,8 +531,6 @@ static void dropTotalsAndExtremesViaTransform(
         totals ? totals->getSharedHeader() : nullptr,
         extremes ? extremes->getSharedHeader() : nullptr);
 
-    /// Put the processor into the pipeline before connecting it: `emplace_back` allocates and can throw,
-    /// and a processor that is connected but not owned leaves the pipeline with ports into a destroyed object.
     auto * dropping_ptr = dropping.get();
     processors.emplace_back(std::move(dropping));
 
@@ -655,7 +653,6 @@ void QueryPipeline::complete(std::shared_ptr<IOutputFormat> format)
         processors->emplace_back(std::move(source));
     }
 
-    /// Own the format before connecting it, see the comment in `dropTotalsAndExtremesViaTransform`.
     auto * format_ptr = format.get();
     processors->emplace_back(std::move(format));
 
