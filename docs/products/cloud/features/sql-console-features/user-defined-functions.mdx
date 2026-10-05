@@ -245,8 +245,8 @@ The following settings are exposed in the console and the API. The defaults are 
 |---|---|---|---|
 | Type | both | - | `executable_pool` or `executable` |
 | Runtime type | both | - | `python3.11` or `Native` |
-| Format | both | `TabSeparated` | Any ClickHouse [input/output format](/reference/formats/index). Argument names and a return name are required for the `Native` and `JSONEachRow` formats. |
-| Return name | both | unset | Name of the returned value (`returnName` in the API, `return_name` in Terraform). Required for the `Native` and `JSONEachRow` formats, which carry the result name; optional otherwise. |
+| Format | both | `TabSeparated` | Any ClickHouse [input/output format](/reference/formats/index). The `Native` and `JSONEachRow` formats also serialize the argument names and the return name. |
+| Return name | both | unset | Name of the returned value (`returnName` in the API, `return_name` in Terraform). For the `Native` and `JSONEachRow` formats the process must label its result column with this name; when unset, the open-source default `result` applies. |
 | Pool size | `executable_pool` | 3 | Number of long-lived processes per replica. Not applicable to `executable`. |
 | Max command execution time (s) | `executable_pool` | 10 | Maximum time to process one block of data. Accepted for `executable` too, where it has no effect. |
 | Command read timeout (ms) | both | 10000 | Timeout reading from the command's stdout. |
@@ -258,7 +258,7 @@ The following settings are exposed in the console and the API. The defaults are 
 
 The following open-source settings are managed by ClickHouse Cloud and cannot be changed per UDF: `command_termination_timeout`, `lifetime`, `stderr_reaction`, `check_exit_code`, and `execute_direct`. The open-source default for `pool_size` is 16, whereas the Cloud default is 3. The full open-source list is in [Executable user-defined functions](/reference/functions/regular-functions/udf#executable-user-defined-functions).
 
-Function names must match `^[A-Za-z][A-Za-z0-9_]*$`, are unique within the organization, and cannot reuse the name of a built-in ClickHouse function; the API rejects reserved names. Archives containing symlinks are rejected.
+Function names must match `^[A-Za-z][A-Za-z0-9_]*$`, are unique within the organization, and cannot reuse the name of a built-in ClickHouse function; the API rejects reserved names. Every argument must have a name that follows the same pattern; the API and Terraform require it for every format. Archives containing symlinks are rejected.
 
 ### Formats and chunk headers {#formats-and-chunk-headers}
 
@@ -461,7 +461,7 @@ resource "clickhouse_udf_attachment" "prod" {
 ```
 
 <Note>
-The provider does not yet expose `deterministic` or the memory limit. Set those in the console or via the API after the first apply.
+The provider does not yet expose `deterministic` or the memory limit. Both are set when a version is created, so versions published by the provider cannot have them. To use them, create those versions through the console or the API instead.
 </Note>
 
 Attaching only succeeds for versions that are ready, and can take several minutes; idle services are woken up automatically. The provider does not reload pools either: for `executable_pool` UDFs, run `SYSTEM RELOAD FUNCTION ON CLUSTER default <name>` on the service after an attachment changes version. Deleting a `clickhouse_udf` resource removes all versions of the function and detaches it from all services.
