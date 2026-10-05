@@ -493,15 +493,17 @@ QueryPipeline::QueryPipeline(std::shared_ptr<IOutputFormat> format)
     if (!totals)
     {
         auto source = std::make_shared<NullSource>(format_totals.getSharedHeader());
-        totals = &source->getPort();
+        auto * source_ptr = source.get();
         processors->emplace_back(std::move(source));
+        totals = &source_ptr->getPort();
     }
 
     if (!extremes)
     {
         auto source = std::make_shared<NullSource>(format_extremes.getSharedHeader());
-        extremes = &source->getPort();
+        auto * source_ptr = source.get();
         processors->emplace_back(std::move(source));
+        extremes = &source_ptr->getPort();
     }
 
     output_format = format.get();
@@ -642,15 +644,17 @@ void QueryPipeline::complete(std::shared_ptr<IOutputFormat> format)
     if (!totals)
     {
         auto source = std::make_shared<NullSource>(format_totals.getSharedHeader());
-        totals = &source->getPort();
+        auto * source_ptr = source.get();
         processors->emplace_back(std::move(source));
+        totals = &source_ptr->getPort();
     }
 
     if (!extremes)
     {
         auto source = std::make_shared<NullSource>(format_extremes.getSharedHeader());
-        extremes = &source->getPort();
+        auto * source_ptr = source.get();
         processors->emplace_back(std::move(source));
+        extremes = &source_ptr->getPort();
     }
 
     auto * format_ptr = format.get();
