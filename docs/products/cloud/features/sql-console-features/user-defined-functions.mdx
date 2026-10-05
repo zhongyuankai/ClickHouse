@@ -103,10 +103,16 @@ If you name the file something else you will encounter an error.
 </Step>
 <Step title="Bundle dependencies and local files" id="bundle-dependencies">
 
-To include dependency packages and any additional local files (such as wheel files, configuration files, or data files), place them in the same directory as your `main.py` and `requirements.txt`. When you create the ZIP archive, include all files:
+For this tutorial, which has no dependencies or extra files, the archive needs only `main.py`:
 
 ```bash
-zip is_business_hours.zip main.py requirements.txt
+zip is_business_hours.zip main.py
+```
+
+To include dependency packages and any additional local files (such as `requirements.txt`, wheel files, configuration files, or data files), place them in the same directory as your `main.py`, then run `zip` from inside that directory so that `main.py` sits at the root of the archive:
+
+```bash
+zip -r ../is_business_hours.zip .
 ```
 
 You can reference the local bundled path base directory in your Python code using `os.path.dirname(os.path.abspath(__file__))`. This returns the absolute path to the directory where your `main.py` is located within the ZIP archive, allowing you to access other bundled files:
@@ -176,8 +182,8 @@ To change a UDF's code or settings, create a new version. Versions are immutable
 
 A new version does not inherit the previous version's service attachments. The new-version panel has a service selector, so you can test a version on one service and roll forward or back per service. A service holds one version of a function at a time.
 
-For `executable_pool` UDFs, the long-lived pool processes keep running the previous version until the pool is reloaded. Use the **Reload UDF** action next to the service in the UDF panel. It runs `SYSTEM RELOAD FUNCTION isBusinessHours ON CLUSTER default` on that service.
-{/* CONFIRM with @zach.naimon: the 'Reload UDF' action is live and this is its exact label. */}
+For `executable_pool` UDFs, the long-lived pool processes keep running the previous version until the pool is reloaded. Use the **Reload UDF** action next to the service in the UDF panel. It runs `SYSTEM RELOAD FUNCTION ON CLUSTER default isBusinessHours` on that service.
+{/* CONFIRM with @zach.naimon: the 'Reload UDF' action is live and this is its exact label, and that attaching a version through the API or Terraform does not reload the pool by itself (the API and Terraform sections say it does not). */}
 
 You have successfully added your first user-defined function via the console, confirmed it runs and seen how to create a new version of it if needed.
 </Step>
@@ -296,7 +302,7 @@ Attaching the first UDF to a service adds a helper container to the service's po
 
 ### Monitoring {#monitoring}
 
-ClickHouse 26.6 and later record executable UDF resource usage. The `ProfileEvents` column of [`system.query_log`](/reference/system-tables/query_log) (and [`system.events`](/reference/system-tables/events) and [`system.metric_log`](/reference/system-tables/metric_log)) has eight counters, all prefixed `ExecutableUserDefinedFunction`:
+ClickHouse 26.6 and later record executable UDF resource usage in eight counters, all prefixed `ExecutableUserDefinedFunction`. Per query, they are entries in the `ProfileEvents` map column of [`system.query_log`](/reference/system-tables/query_log). Server-wide, they are rows of [`system.events`](/reference/system-tables/events), cumulative since server start, and `ProfileEvent_<name>` columns of [`system.metric_log`](/reference/system-tables/metric_log), sampled over time. The counter suffixes are:
 
 | Counter | Meaning |
 |---|---|
@@ -360,8 +366,8 @@ Common cases:
 <BetaBadge/>
 {/* CONFIRM with @zach.naimon: whether PMM wants the Cloud API and Terraform beta badges and the "contract may change" notes dropped at GA. */}
 
-Everything available in the console is also available programmatically through the [ClickHouse Cloud API](/products/cloud/features/admin-features/api/api-overview).
-The UDF endpoints let you script the full lifecycle of a UDF: uploading source archives, creating functions and versions, attaching them to services, and cleaning them up.
+The lifecycle operations of the console are also available programmatically through the [ClickHouse Cloud API](/products/cloud/features/admin-features/api/api-overview).
+The UDF endpoints let you script uploading source archives, creating functions and versions, attaching them to services and detaching them, and deleting versions and functions. The API has no reload operation: after attaching a new version of an `executable_pool` UDF to a service, run `SYSTEM RELOAD FUNCTION ON CLUSTER default <name>` over SQL on that service so that the pool processes pick up the new version.
 
 <Note>
 These endpoints are in beta and the API contract may change.
@@ -465,4 +471,4 @@ resource "clickhouse_udf_attachment" "prod" {
 The provider does not yet expose `deterministic` or the memory limit. Set those in the console or via the API after the first apply.
 </Note>
 
-Attaching only succeeds for versions that are ready, and can take several minutes; idle services are woken up automatically. Deleting a `clickhouse_udf` resource removes all versions of the function and detaches it from all services.
+Attaching only succeeds for versions that are ready, and can take several minutes; idle services are woken up automatically. The provider does not reload pools either: for `executable_pool` UDFs, run `SYSTEM RELOAD FUNCTION ON CLUSTER default <name>` on the service after an attachment changes version. Deleting a `clickhouse_udf` resource removes all versions of the function and detaches it from all services.
