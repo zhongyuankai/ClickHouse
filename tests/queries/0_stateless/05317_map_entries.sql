@@ -1,3 +1,5 @@
+SET print_pretty_type_names = 0;
+
 SELECT mapEntries(map('a', 1, 'b', 2)) FORMAT TabSeparatedRaw;
 
 SELECT mapEntries(map('a', 1, 'a', 2, 'b', 3)) FORMAT TabSeparatedRaw;
