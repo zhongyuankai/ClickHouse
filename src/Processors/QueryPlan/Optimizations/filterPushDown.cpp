@@ -463,8 +463,7 @@ std::optional<ActionsDAG> tryToExtractPartialPredicate(
 
 void addFilterOnTop(QueryPlan::Node & join_node, size_t child_idx, QueryPlan::Nodes & nodes, ActionsDAG filter_dag);
 
-static size_t tryPushDownOverJoinStep(
-    QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes, QueryPlan::Node * child_node, const Optimization::ExtraSettings & settings)
+static size_t tryPushDownOverJoinStep(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes, QueryPlan::Node * child_node)
 {
     auto & parent = parent_node->step;
     QueryPlanStepPtr & child = child_node->step;
@@ -476,21 +475,6 @@ static size_t tryPushDownOverJoinStep(
 
     if (!join && !filled_join && !logical_join)
         return 0;
-
-    /// No row passes the filter, so an input it cannot be pushed to contributes nothing to the output.
-    auto empty_inputs_under_false_filter = [&](bool empty_left, bool empty_right) -> size_t
-    {
-        if (!logical_join || child_node->children.size() != 2 || settings.make_distributed_plan
-            || logical_join->hasCorrelatedExpressions() || isSensitiveToEvaluationCount(filter->getExpression())
-            || filterResultForNotMatchedRows(filter->getExpression(), filter->getFilterColumnName(), Block{}) != FilterResult::FALSE)
-            return 0;
-        size_t emptied = 0;
-        if (empty_left)
-            emptied += replaceJoinInputWithEmptySource(*child_node, /*side=*/0, nodes);
-        if (empty_right)
-            emptied += replaceJoinInputWithEmptySource(*child_node, /*side=*/1, nodes);
-        return emptied;
-    };
 
     /** For equivalent JOIN with condition `ON lhs.x_1 = rhs.y_1 AND lhs.x_2 = rhs.y_2 ...`, we can build equivalent sets of columns and this
       * will allow to push conditions that only use columns from equivalent sets to both sides of JOIN, without considering JOIN type.
@@ -525,7 +509,7 @@ static size_t tryPushDownOverJoinStep(
     if (table_join_ptr && table_join_ptr->kind() == JoinKind::Full)
         return 0;
     if (logical_join && logical_join->getJoinOperator().kind == JoinKind::Full)
-        return empty_inputs_under_false_filter(/*empty_left=*/ true, /*empty_right=*/ true);
+        return 0;
 
     /// PASTE JOIN aligns rows from both sides by position, and pushing filters
     /// to either side may change relative alignment
@@ -837,11 +821,6 @@ static size_t tryPushDownOverJoinStep(
     Names left_stream_available_columns_to_push_down = get_available_columns_for_filter(true /*push_to_left_stream*/, left_stream_filter_push_down_input_columns_available);
     Names right_stream_available_columns_to_push_down = get_available_columns_for_filter(false /*push_to_left_stream*/, right_stream_filter_push_down_input_columns_available);
 
-    size_t emptied_inputs = 0;
-    if (left_stream_available_columns_to_push_down.empty() || right_stream_available_columns_to_push_down.empty())
-        emptied_inputs = empty_inputs_under_false_filter(
-            left_stream_available_columns_to_push_down.empty(), right_stream_available_columns_to_push_down.empty());
-
     if (left_stream_filter_push_down_input_columns_available)
     {
         for (const auto & [name, _] : equivalent_left_stream_column_to_right_stream_column)
@@ -879,6 +858,12 @@ static size_t tryPushDownOverJoinStep(
     if (is_filter_column_const_before)
         original_filter_const_column = filter->getOutputHeader()->getByName(filter->getFilterColumnName()).column;
 
+    /// With no input given only the conjuncts that read no column are evaluated, so FALSE means no row passes.
+    const bool filter_is_always_false
+        = (left_stream_filter_push_down_input_columns_available || right_stream_filter_push_down_input_columns_available)
+        && !isSensitiveToEvaluationCount(filter->getExpression())
+        && filterResultForNotMatchedRows(filter->getExpression(), filter->getFilterColumnName(), Block{}) == FilterResult::FALSE;
+
     auto join_filter_push_down_actions = filter->getExpression().splitActionsForJOINFilterPushDown(
         filter->getFilterColumnName(),
         filter->removesFilterColumn(),
@@ -889,7 +874,8 @@ static size_t tryPushDownOverJoinStep(
         equivalent_columns_to_push_down,
         equivalent_left_stream_column_to_right_stream_column,
         equivalent_right_stream_column_to_left_stream_column,
-        cross_type_equivalent_columns);
+        cross_type_equivalent_columns,
+        filter_is_always_false);
 
     if (is_filter_column_const_before && !join_filter_push_down_actions.is_filter_const_after_all_push_downs)
     {
@@ -1108,7 +1094,7 @@ static size_t tryPushDownOverJoinStep(
             (logical_join && logical_join->isDisjunctionsOptimizationApplied()) ||
             (filled_join && filled_join->isDisjunctionsOptimizationApplied()))
         {
-            return updated_steps + emptied_inputs;
+            return updated_steps;
         }
 
         /// Unlike the main push-down above, addFilterOnTop builds the partial FilterStep directly
@@ -1168,7 +1154,7 @@ static size_t tryPushDownOverJoinStep(
             updated_steps = std::max<size_t>(updated_steps, 3);
     }
 
-    return updated_steps + emptied_inputs;
+    return updated_steps;
 }
 
 size_t tryPushDownFilter(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes, const Optimization::ExtraSettings & settings)
@@ -1359,7 +1345,7 @@ size_t tryPushDownFilter(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes
     if (auto updated_steps = simplePushDownOverStep<BuildRuntimeFilterStep>(parent_node, true, nodes, child))
         return updated_steps;
 
-    if (auto updated_steps = tryPushDownOverJoinStep(parent_node, nodes, child_node, settings))
+    if (auto updated_steps = tryPushDownOverJoinStep(parent_node, nodes, child_node))
         return updated_steps;
 
     /// TODO.
