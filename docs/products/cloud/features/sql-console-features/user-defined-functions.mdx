@@ -382,7 +382,7 @@ The request fields that select the capabilities described above are:
 | [`deterministic`](/products/cloud/api-reference/udf/udf-create) | `true` or `false` (default) | [Deterministic](#deterministic-functions-and-the-query-cache) |
 | [`sendChunkHeader`](/products/cloud/api-reference/udf/udf-create) | `true` or `false` (default) | [Chunk headers](#formats-and-chunk-headers) |
 | [`format`](/products/cloud/api-reference/udf/udf-create) | any format name, `TabSeparated` by default | [Formats](#formats-and-chunk-headers) |
-| [`poolSize`](/products/cloud/api-reference/udf/udf-create) | integer, 3 by default | Pool size |
+| [`poolSize`](/products/cloud/api-reference/udf/udf-create) | integer, 3 by default; for `executable` it must be omitted or `null` | Pool size |
 | [`maxCommandExecutionTime`](/products/cloud/api-reference/udf/udf-create) | seconds, 10 by default | Max command execution time; no effect for `executable` |
 
 The full set of endpoints:
