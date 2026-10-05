@@ -714,6 +714,9 @@ public:
         const auto & nested_map = map.getNestedColumn();
         const auto & offsets = nested_map.getOffsets();
 
+        if (nested_map.getData().empty())
+            return map_column;
+
         const auto & map_type = assert_cast<const DataTypeMap &>(*arguments[0].type);
         auto key_column = recursiveRemoveLowCardinality(map.getNestedData().getColumnPtr(0));
         auto key_type = recursiveRemoveLowCardinality(map_type.getKeyType());
