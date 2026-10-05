@@ -816,7 +816,7 @@ bool intersectLeapfrogImpl(UInt8 * out, const std::vector<PostingListCursor *> &
     if constexpr (num_cursors == 0)
         cursors = cursor_ptrs;
     else
-        std::ranges::copy(cursor_ptrs, cursors.begin());
+        std::copy_n(cursor_ptrs.begin(), num_cursors, cursors.begin());
 
     PostingListCursor & lead = *cursors[0];
     bool found = false;
