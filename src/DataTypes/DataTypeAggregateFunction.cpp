@@ -569,13 +569,11 @@ namespace
 std::vector<size_t> getAggregateStateVersions(const IDataType & type)
 {
     std::vector<size_t> versions;
-    auto collect = [&](const IDataType & child)
+    forEachInTypeTree(type, [&](const IDataType & child)
     {
         if (const auto * aggregate_type = typeid_cast<const DataTypeAggregateFunction *>(&child))
             versions.push_back(aggregate_type->getVersion());
-    };
-    collect(type);
-    type.forEachChild(collect);
+    });
     return versions;
 }
 
