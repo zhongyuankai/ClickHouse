@@ -10,6 +10,14 @@
 namespace DB
 {
 
+/// Compare two Map keys with the same semantics as Map key lookup.
+/// The non-zero NaN direction makes NaN match NaN and nested NULL match NULL,
+/// without treating either as equal to unrelated values.
+inline bool mapKeyEquals(const IColumn & keys, size_t key_row, const IColumn & lookup_keys, size_t lookup_row)
+{
+    return keys.compareAt(key_row, lookup_row, lookup_keys, 1) == 0;
+}
+
 /// Optimized extraction of values for a given constant key from a Map column
 /// stored as Array(Tuple(K, V)).
 ///
