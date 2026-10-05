@@ -183,7 +183,6 @@ To change a UDF's code or settings, create a new version. Versions are immutable
 A new version does not inherit the previous version's service attachments. The new-version panel has a service selector, so you can test a version on one service and roll forward or back per service. A service holds one version of a function at a time.
 
 For `executable_pool` UDFs, the long-lived pool processes keep running the previous version until the pool is reloaded. Use the **Reload UDF** action next to the service in the UDF panel. It runs `SYSTEM RELOAD FUNCTION ON CLUSTER default isBusinessHours` on that service.
-{/* CONFIRM with @zach.naimon: the 'Reload UDF' action is live and this is its exact label, and that attaching a version through the API or Terraform does not reload the pool by itself (the API and Terraform sections say it does not). */}
 
 You have successfully added your first user-defined function via the console, confirmed it runs and seen how to create a new version of it if needed.
 </Step>
@@ -219,9 +218,6 @@ Binaries must be statically linked.
 Files in the architecture folder are deployed next to the binary, but the process does not start in that directory. Resolve them relative to the executable's own path, never relative to the working directory: in Go use `filepath.Dir(os.Args[0])` or `os.Executable()`, in Rust use `std::env::current_exe()`. If a required file is missing, write a message to stderr and exit non-zero rather than falling back silently.
 </Warning>
 
-Native UDFs are compute-only. Outbound network access is available for the Python runtime only; see [Network access](#network-access).
-{/* CONFIRM with @zach.naimon: Native UDFs still have no network access at GA. */}
-
 Build the binary for both architectures. In Rust, add both targets once, then build each:
 
 ```bash
@@ -240,7 +236,6 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o arm64/main .
 Copy each output to `amd64/main` and `arm64/main` before you zip the folders.
 
 The wire protocol is identical to the Python runtime: the process reads arguments from stdin and writes results to stdout in the configured format. See [Formats and chunk headers](#formats-and-chunk-headers). The [`llm-token-udf`](https://github.com/ClickHouse/llm-token-udf) repository contains Rust and Go Native UDFs with build scripts.
-{/* CONFIRM with @zach.naimon: https://github.com/ClickHouse/native-udf-examples returned 404 on 2026-10-05, so the public llm-token-udf repository is linked instead. Swap the link if native-udf-examples is made public. */}
 
 ### Configuration reference {#configuration-reference}
 
@@ -252,13 +247,13 @@ The following settings are exposed in the console and the API. The defaults are 
 | Runtime type | both | - | `python3.11` or `Native` |
 | Format | both | `TabSeparated` | Any ClickHouse [input/output format](/reference/formats/index). Argument names are required for the `Native` and `JSONEachRow` formats. |
 | Pool size | `executable_pool` | 3 | Number of long-lived processes per replica. Not applicable to `executable`. |
-| Max command execution time (s) | `executable_pool` | 10 | Maximum time to process one block of data. |
+| Max command execution time (s) | `executable_pool` | 10 | Maximum time to process one block of data. Accepted for `executable` too, where it has no effect. |
 | Command read timeout (ms) | both | 10000 | Timeout reading from the command's stdout. |
 | Command write timeout (ms) | both | 10000 | Timeout writing to the command's stdin. |
 | Send chunk header | both | false | Sends the row count before each chunk. See [Formats and chunk headers](#formats-and-chunk-headers). |
 | Deterministic | both | false | Lets the query cache store results of queries that call this function. See [Deterministic functions and the query cache](#deterministic-functions-and-the-query-cache). |
 | Memory limit (MiB) | both | sandbox default | Maximum memory per sandbox process. See [Memory limit](#memory-limit). |
-| Network access | Python runtime | off | Allows outbound connections to public endpoints. See [Network access](#network-access). |
+| Network access | Python runtime | on in the console, `basic` in the API | Outbound connections to public endpoints. Not a console setting; selected by `sandboxType` in the API. See [Network access](#network-access). |
 
 The following open-source settings are managed by ClickHouse Cloud and cannot be changed per UDF: `command_termination_timeout`, `lifetime`, `stderr_reaction`, `check_exit_code`, and `execute_direct`. The open-source default for `pool_size` is 16, whereas the Cloud default is 3. The full open-source list is in [Executable user-defined functions](/reference/functions/regular-functions/udf#executable-user-defined-functions).
 
@@ -272,8 +267,7 @@ With **Send chunk header** on, ClickHouse writes the number of rows as decimal t
 
 ### Network access {#network-access}
 
-By default a UDF has no network access. Enable the **Network access** option when creating a UDF or a version (`sandboxType: netenable` in the API; the default is `basic`).
-{/* CONFIRM with @zach.naimon: the exact console label for network access, and whether it is a per-UDF opt-in or on by default. */}
+UDFs created in the console with the `python3.11` runtime are built with network access enabled; there is no console setting for it. In the API, `sandboxType` selects the sandbox: the default `basic` has no network access, and `netenable` allows outbound connections. The Terraform provider exposes the same choice as `sandbox_type`.
 
 Network access allows outbound connections to public internet endpoints. Connections to private networks, link-local addresses, and internal addresses are blocked. The sandbox has no cloud identity: no instance role, no metadata endpoint, and no inherited environment variables, so a UDF only has the credentials you give it. Network access is applied when a UDF version is built, so an existing version created without it needs a new version.
 
@@ -282,7 +276,6 @@ There is no secrets store for UDFs yet. Bundle a config file in the zip and read
 ### Memory limit {#memory-limit}
 
 **Memory limit** sets the maximum memory, in MiB, available to each sandbox process. When unset, the sandbox default of 4 GiB applies.
-{/* CONFIRM with @zach.naimon: the sandbox default memory limit is 4 GiB. */}
 
 The limit applies to virtual address space, not resident memory, so runtimes that reserve large address ranges need headroom well above their actual usage. Go reserves well over 1 GiB of address space at startup. When a process exceeds the limit, the allocation fails inside the process: a Python UDF exits with a `MemoryError` traceback, and the query fails with that stderr in the error message.
 
@@ -290,7 +283,7 @@ The limit applies to virtual address space, not resident memory, so runtimes tha
 
 By default a UDF is treated as non-deterministic. A query that calls one with [`use_query_cache = 1`](/reference/settings/session-settings/use-query#use_query_cache) fails with `QUERY_CACHE_USED_WITH_NONDETERMINISTIC_FUNCTIONS`, unless [`query_cache_nondeterministic_function_handling`](/reference/settings/session-settings/query-cache#query_cache_nondeterministic_function_handling) is changed.
 
-Enable **Deterministic** only when the function always returns the same result for the same arguments. The [query cache](/concepts/features/performance/caches/query-cache) can then store and serve results of queries that call it. Other non-deterministic functions in the same query, such as `now`, `today`, or `rand`, still prevent caching.
+Enable **Deterministic** only when the function always returns the same result for the same arguments. The [query cache](/concepts/features/performance/caches/query-cache) can then store and serve results of queries that call it. Other non-deterministic functions in the same query, such as `now`, `today`, or `rand`, still prevent caching under the default `throw` handling; `query_cache_nondeterministic_function_handling = 'save'` caches such queries anyway, and `'ignore'` runs them without caching.
 
 ### Service restarts {#service-restarts}
 
@@ -384,13 +377,13 @@ The request fields that select the capabilities described above are:
 | Request field | Values | Selects |
 |---|---|---|
 | [`runtime`](/products/cloud/api-reference/udf/udf-create) | `python3.11` or `native` | [Runtime type](#native-runtime) |
-| [`sandboxType`](/products/cloud/api-reference/udf/udf-create) | `basic` (default) or `netenable` | [Network access](#network-access) |
+| [`sandboxType`](/products/cloud/api-reference/udf/udf-create) | `basic` (API default, no network access) or `netenable` | [Network access](#network-access) |
 | [`memoryLimitMib`](/products/cloud/api-reference/udf/udf-create) | integer, or null for the sandbox default | [Memory limit](#memory-limit) |
 | [`deterministic`](/products/cloud/api-reference/udf/udf-create) | `true` or `false` (default) | [Deterministic](#deterministic-functions-and-the-query-cache) |
 | [`sendChunkHeader`](/products/cloud/api-reference/udf/udf-create) | `true` or `false` (default) | [Chunk headers](#formats-and-chunk-headers) |
 | [`format`](/products/cloud/api-reference/udf/udf-create) | any format name, `TabSeparated` by default | [Formats](#formats-and-chunk-headers) |
 | [`poolSize`](/products/cloud/api-reference/udf/udf-create) | integer, 3 by default | Pool size |
-| [`maxCommandExecutionTime`](/products/cloud/api-reference/udf/udf-create) | seconds, 10 by default | Max command execution time |
+| [`maxCommandExecutionTime`](/products/cloud/api-reference/udf/udf-create) | seconds, 10 by default | Max command execution time; no effect for `executable` |
 
 The full set of endpoints:
 
@@ -448,8 +441,7 @@ resource "clickhouse_udf_attachment" "production" {
 }
 ```
 
-The `clickhouse_udf` resource also accepts `format`, `pool_size`, `max_command_execution_time`, `command_read_timeout`, `command_write_timeout`, `send_chunk_header`, and `sandbox_type`.
-{/* CONFIRM with @zach.naimon: that `runtime = "native"` is accepted by the Terraform provider, and add it to the attribute list above if so. The provider schema documents `runtime` as a free-form string and the API accepts `native`, but this has not been verified against the provider. */}
+The `clickhouse_udf` resource also accepts `format`, `pool_size`, `max_command_execution_time`, `command_read_timeout`, `command_write_timeout`, `send_chunk_header`, `sandbox_type`, and `runtime`.
 
 To test a new version on a development service before it reaches production, let one attachment track the latest version and pin the other to a variable. The development attachment follows every new build automatically, while the production attachment moves only when you change `var.prod_udf_version`:
 
