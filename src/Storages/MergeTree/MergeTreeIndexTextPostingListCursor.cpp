@@ -8,8 +8,6 @@
 #include <Common/ProfileEvents.h>
 #include <Columns/ColumnsNumber.h>
 #include <IO/ReadHelpers.h>
-#include <Common/TargetSpecific.h>
-#include <config.h>
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -452,6 +450,7 @@ void PostingListCursor::advance(uint32_t target)
     /// An embedded list is a single decoded block, and the target is past its last doc_id.
     if (is_embedded)
     {
+        index = decoded_count;
         is_valid = false;
         return;
     }
@@ -638,50 +637,40 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
         if (row_offset + num_rows <= seg_begin)
             break;
 
-        const bool segment_loaded = i == current_segment_idx && current_segment;
+        size_t seg_range_span = seg_end - seg_begin + 1;
+        size_t seg_clip_begin = std::max(seg_begin, row_offset);
+        size_t seg_clip_end = std::min(seg_end + 1, row_offset + num_rows);
 
-        /// Level 2a: segment-level skip. If the output region for this segment is already resolved
+        /// Segment-level skip. If the output region for this segment is already resolved
         /// (all-ones for OR, no surviving row for AND), skip entirely — saving the I/O cost of prepareSegment.
-        /// A loaded segment has no load cost left to save, so the check is left to its blocks.
-        if (!segment_loaded)
+        if (seg_clip_begin < seg_clip_end)
         {
-            size_t clip_begin = std::max(seg_begin, row_offset);
-            size_t clip_end = std::min(seg_end + 1, row_offset + num_rows);
+            size_t clip_offset = seg_clip_begin - row_offset;
+            size_t clip_count = seg_clip_end - seg_clip_begin;
 
-            if (clip_begin < clip_end)
+            if (canSkipRegion<op>(data + clip_offset, clip_count, num_applied))
             {
-                size_t clip_off = clip_begin - row_offset;
-                size_t clip_count = clip_end - clip_begin;
-
-                if (canSkipRegion<op>(data + clip_off, clip_count, num_applied))
-                {
-                    ++counters.segments_skipped_resolved;
-                    continue;
-                }
+                ++counters.segments_skipped_resolved;
+                continue;
             }
         }
 
-        if (!segment_loaded)
+        /// Skip re-preparing the segment if it is already loaded.
+        if (i != current_segment_idx || !current_segment)
             prepareSegment(i);
 
-        /// Level 1: dense segment shortcut.
-        /// If every row in the segment range has a posting, pad the whole clipped range at once
-        /// instead of decoding blocks.
+        /// Dense segment shortcut.
+        /// If every row in the segment range has a posting,
+        /// pad the whole clipped range at once instead of decoding blocks.
+        if (current_segment->doc_count == seg_range_span && seg_clip_begin < seg_clip_end)
         {
-            size_t range_span = seg_end - seg_begin + 1;
-            if (current_segment->doc_count == range_span)
-            {
-                size_t clip_begin = std::max(seg_begin, row_offset);
-                size_t clip_end = std::min(seg_end + 1, row_offset + num_rows);
+            size_t clip_offset = seg_clip_begin - row_offset;
+            size_t clip_count = seg_clip_end - seg_clip_begin;
 
-                if (clip_begin < clip_end)
-                {
-                    ++counters.segments_skipped_dense;
-                    padDenseRange<op>(data + (clip_begin - row_offset), clip_end - clip_begin);
-                    window.extend(clip_begin, clip_end);
-                    continue;
-                }
-            }
+            ++counters.segments_skipped_dense;
+            padDenseRange<op>(data + clip_offset, clip_count);
+            window.extend(seg_clip_begin, seg_clip_end);
+            continue;
         }
 
         /// Decode all blocks in this segment that overlap with [row_offset, row_offset + num_rows).
@@ -718,19 +707,9 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
             const size_t block_clip_end = std::min(static_cast<size_t>(block_last) + 1, row_offset + num_rows);
             chassert(block_clip_begin < block_clip_end);
 
-            /// A block that straddles two consecutive windows is still decoded from the previous call.
-            const bool block_decoded = block_idx == current_block && decoded_count != 0;
-
-            /// Level 2b: block-level skip (same resolved-region test as Level 2a, per block).
-            /// A decoded block has no decoding cost left to save, so the check is not worth it.
-            if (!block_decoded && canSkipRegion<op>(data + (block_clip_begin - row_offset), block_clip_end - block_clip_begin, num_applied))
-            {
-                ++counters.blocks_skipped_resolved;
-                continue;
-            }
-
             /// Level 1b: dense block shortcut. A block whose row ids are consecutive covers its whole row range,
             /// so the clipped range is padded at once instead of decoding the block.
+            /// It goes before Level 2b: padding at most a block of rows is cheaper than the resolved-region test.
             const bool is_tail_block = block_idx + 1 == block_count && current_segment->tail_size > 0;
             const size_t block_size = is_tail_block ? current_segment->tail_size : IPostingListBlockCodec::BLOCK_SIZE;
 
@@ -742,7 +721,15 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
                 continue;
             }
 
-            if (!block_decoded)
+            /// Level 2b: block-level skip (same resolved-region test as Level 2a, per block).
+            if (canSkipRegion<op>(data + (block_clip_begin - row_offset), block_clip_end - block_clip_begin, num_applied))
+            {
+                ++counters.blocks_skipped_resolved;
+                continue;
+            }
+
+            /// A block that straddles two consecutive windows is still decoded from the previous call.
+            if (block_idx != current_block || decoded_count == 0)
                 decodeBlock(block_idx);
 
             chassert(index <= decoded_count);
@@ -894,41 +881,6 @@ bool intersectLeapfrog(UInt8 * out, const std::vector<PostingListCursorPtr> & cu
     }
 }
 
-#if USE_MULTITARGET_CODE
-DECLARE_X86_64_V3_SPECIFIC_CODE(
-void finalizeCounters(UInt8 * out, size_t num_rows, UInt8 target)
-{
-    __m256i t = _mm256_set1_epi8(static_cast<char>(target));
-    __m256i one = _mm256_set1_epi8(1);
-    size_t i = 0;
-    for (; i + 32 <= num_rows; i += 32)
-    {
-        __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(out + i));
-        __m256i eq = _mm256_cmpeq_epi8(v, t);
-        __m256i result = _mm256_and_si256(eq, one);
-        _mm256_storeu_si256(reinterpret_cast<__m256i *>(out + i), result);
-    }
-    for (; i < num_rows; ++i)
-        out[i] = (out[i] == target);
-}
-) /// DECLARE_X86_64_V3_SPECIFIC_CODE
-#endif
-
-void finalizeCounters(UInt8 * out, size_t num_rows, UInt8 target)
-{
-#if USE_MULTITARGET_CODE
-    if (isArchSupported(TargetArch::x86_64_v3))
-    {
-        TargetSpecific::x86_64_v3::finalizeCounters(out, num_rows, target);
-        return;
-    }
-#endif
-
-    for (size_t i = 0; i < num_rows; ++i)
-        out[i] = (out[i] == target);
-}
-
-
 /// Brute-force intersection via bitmap counting. The cursors are sorted by ascending cardinality.
 /// First cursor sets bits (linearOr), remaining cursors increment counters (linearAnd),
 /// then a final pass converts count == n into 1, everything else into 0.
@@ -961,11 +913,17 @@ bool intersectBruteForce(UInt8 * out, const std::vector<PostingListCursorPtr> & 
         window = written;
     }
 
-    size_t n = cursors.size();
-    if (n > 1)
+    if (cursors.size() > 1)
     {
-        chassert(n < 256);
-        finalizeCounters(out + (first.begin - row_offset), first.end - first.begin, static_cast<UInt8>(n));
+        chassert(cursors.size() < 256);
+
+        UInt8 * __restrict row_counts = out + (first.begin - row_offset);
+        const size_t count = first.end - first.begin;
+        const UInt8 target = static_cast<UInt8>(cursors.size());
+
+        /// The compiler vectorizes and unrolls this loop.
+        for (size_t i = 0; i < count; ++i)
+            row_counts[i] = (row_counts[i] == target);
     }
 
     return true;
