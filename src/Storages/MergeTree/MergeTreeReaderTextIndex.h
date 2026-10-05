@@ -11,7 +11,6 @@
 #include <Interpreters/ExpressionActions.h>
 
 #include <absl/container/flat_hash_map.h>
-#include <absl/container/flat_hash_set.h>
 #include <roaring/roaring.hh>
 
 namespace DB
@@ -80,10 +79,8 @@ private:
     MergeTreeDataPartPtr getDataPart() const;
 
     void readGranule();
-    /// Sets per-column flags from the analyzer's verdict and collects tokens to materialize.
+    /// Sets per-column flags from the analyzer's verdict.
     void classifyVirtualColumns();
-    /// Collects the tokens whose postings the analysis left to read into `tokens_to_read`.
-    void initializeTokensToRead();
     void fillColumn(IColumn & column, const PostingList & postings, size_t row_offset, size_t num_rows);
     void fillColumnLazy(IColumn & column, size_t column_idx, size_t row_offset, size_t num_rows, PostingList & range_posting);
 
@@ -155,8 +152,6 @@ private:
     std::vector<bool> use_fallback;
     /// A separate stream is created for each token to read postings blocks continuously without additional seeks.
     absl::flat_hash_map<std::string_view, std::unique_ptr<MergeTreeReaderStream>> postings_streams;
-    /// Tokens the analysis left to read: needed by some query and without postings read during the analysis.
-    absl::flat_hash_set<std::string_view> tokens_to_read;
 
     /// Stream for position data (.pos file) used for phrase queries.
     std::unique_ptr<MergeTreeReaderStream> positions_stream;

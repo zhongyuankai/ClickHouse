@@ -70,6 +70,7 @@ MergeTreeReaderTextIndex::MergeTreeReaderTextIndex(
     , index(std::move(index_))
     , can_read_incomplete_granules(main_reader_->canReadIncompleteGranules())
     , condition_text(std::dynamic_pointer_cast<MergeTreeIndexConditionText>(index.condition_template->generateUnsubstituted()))
+    , resolved_searches(columns_.size())
 {
     search_queries.reserve(columns_.size());
     for (const auto & column : columns_)
@@ -83,8 +84,6 @@ MergeTreeReaderTextIndex::MergeTreeReaderTextIndex(
 
         search_queries.push_back(condition_text->getSearchQueryForVirtualColumn(column.name));
     }
-
-    resolved_searches.resize(columns_.size());
 
     auto data_part = getDataPart();
     auto index_format = index.index->getDeserializedFormat(*data_part, index.index->getFileName());
@@ -365,18 +364,6 @@ void MergeTreeReaderTextIndex::classifyVirtualColumns()
     }
 }
 
-void MergeTreeReaderTextIndex::initializeTokensToRead()
-{
-    const auto & analyzer = granule->getAnalyzer();
-    const auto & token_infos = analyzer.getAllTokenInfos();
-
-    for (const auto & [token, _] : token_infos)
-    {
-        if (analyzer.isTokenNeeded(token) && !analyzer.hasReadPostings(token))
-            tokens_to_read.insert(token);
-    }
-}
-
 PostingListCursorPtr MergeTreeReaderTextIndex::makeLazyCursor(std::string_view token, const TokenPostingsInfo & token_info)
 {
     if (!(token_info.header & PostingsSerialization::Flags::IsCompressed))
@@ -472,7 +459,6 @@ size_t MergeTreeReaderTextIndex::readRows(
 
         is_initialized = true;
         classifyVirtualColumns();
-        initializeTokensToRead();
         initializePositionsStream();
     }
 
@@ -673,7 +659,8 @@ PostingList MergeTreeReaderTextIndex::buildPostingsForQuery(
 
     for (const auto & [token, token_info] : query_builder.tokens)
     {
-        if (!tokens_to_read.contains(token))
+        /// Skip tokens no longer needed and tokens whose postings the analysis has already folded into `query_builder.postings`.
+        if (!analyzer.isTokenNeeded(token) || analyzer.hasReadPostings(token))
             continue;
 
         auto read_blocks = readPostingsBlocksForToken(token, *token_info, range);
@@ -791,6 +778,7 @@ MergeTreeReaderTextIndex::ResolvedSearch MergeTreeReaderTextIndex::resolveSearch
     ResolvedSearch resolved;
 
     const auto & search_query = search_queries[column_idx];
+    chassert(search_query);
     chassert(search_query->getPatterns().empty());
 
     /// Fill zeros without tokens.
@@ -807,7 +795,7 @@ MergeTreeReaderTextIndex::ResolvedSearch MergeTreeReaderTextIndex::resolveSearch
     {
         for (const auto & [token, token_info] : query_builder.tokens)
         {
-            if (analyzer.hasReadPostings(token))
+            if (!analyzer.isTokenNeeded(token) || analyzer.hasReadPostings(token))
                 continue;
 
             auto cursor = makeLazyCursor(token, *token_info);

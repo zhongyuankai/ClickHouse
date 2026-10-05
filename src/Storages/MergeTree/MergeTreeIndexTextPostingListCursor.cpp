@@ -1197,6 +1197,11 @@ TextIndexPostingsIntersectionAlgorithm chooseIntersectionAlgorithm(const std::ve
     const size_t n = cursors.size();
     bool use_brute_force = algorithm == TextIndexPostingsIntersectionAlgorithm::BruteForce;
 
+    /// `Auto` picks leapfrog only where it can skip whole packed blocks of the densest list.
+    /// A block of that list spans about `BLOCK_SIZE / max_density` rows.
+    /// Over that span, the sparsest list has about `min_density * BLOCK_SIZE / max_density` postings.
+    /// Once that reaches one, leapfrog decodes every block anyway and only adds a search per posting
+    /// on top of the brute-force counting pass.
     if (algorithm == TextIndexPostingsIntersectionAlgorithm::Auto)
     {
         double min_density = std::numeric_limits<double>::max();
@@ -1230,11 +1235,11 @@ bool lazyUnionPostingLists(
     auto & data = assert_cast<DB::ColumnUInt8 &>(column).getData();
     UInt8 * out = data.data() + column_offset;
 
-    bool any_set = false;
+    bool may_be_true = false;
     for (auto * cursor : cursors)
-        any_set |= !cursor->linearOr(out, row_offset, num_rows).empty();
+        may_be_true |= !cursor->linearOr(out, row_offset, num_rows).empty();
 
-    return any_set;
+    return may_be_true;
 }
 
 bool lazyIntersectPostingLists(
