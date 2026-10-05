@@ -803,6 +803,7 @@ namespace
 template <size_t num_cursors>
 bool intersectLeapfrogImpl(UInt8 * out, const std::vector<PostingListCursor *> & cursor_ptrs, size_t row_offset, size_t effective_end)
 {
+    static_assert(num_cursors <= 8);
     const size_t n = num_cursors ? num_cursors : cursor_ptrs.size();
     chassert(cursor_ptrs.size() == n);
 
@@ -813,10 +814,9 @@ bool intersectLeapfrogImpl(UInt8 * out, const std::vector<PostingListCursor *> &
 
     CursorsType cursors{};
     if constexpr (num_cursors == 0)
-        cursors.resize(n);
-
-    for (size_t i = 0; i < n; ++i)
-        cursors[i] = cursor_ptrs[i];
+        cursors = cursor_ptrs;
+    else
+        std::ranges::copy(cursor_ptrs, cursors.begin());
 
     PostingListCursor & lead = *cursors[0];
     bool found = false;
