@@ -192,7 +192,7 @@ You have successfully added your first user-defined function via the console, co
 
 The Native runtime lets you upload a precompiled binary instead of a Python script. Set **Runtime type** to **Native** when creating the UDF (`runtime: native` in the API). Nothing is installed in the sandbox for you; everything the binary needs must be compiled in.
 
-Supported today: Rust, Go, C++, and JavaScript compiled to a binary with Bun.
+Any toolchain that produces a suitable Linux executable can be used. Examples are Rust, Go, C++, and JavaScript compiled to a binary with Bun.
 {/* CONFIRM with @zach.naimon: the pinned Bun version and build target, and whether the supported list is exactly these four. */}
 
 The archive must contain one executable per CPU architecture, each in its own folder:
@@ -253,7 +253,7 @@ The following settings are exposed in the console and the API. The defaults are 
 | Send chunk header | both | false | Sends the row count before each chunk. See [Formats and chunk headers](#formats-and-chunk-headers). |
 | Deterministic | both | false | Lets the query cache store results of queries that call this function. See [Deterministic functions and the query cache](#deterministic-functions-and-the-query-cache). |
 | Memory limit (MiB) | both | sandbox default | Maximum memory per sandbox process. See [Memory limit](#memory-limit). |
-| Network access | Python runtime | on in the console, `basic` in the API | Outbound connections to public endpoints. Not a console setting; selected by `sandboxType` in the API. See [Network access](#network-access). |
+| Network access | both | `basic` in the API | Outbound connections to public endpoints, selected by `sandboxType` in the API; not a console setting. Python UDFs created in the console are built with it enabled. See [Network access](#network-access). |
 
 The following open-source settings are managed by ClickHouse Cloud and cannot be changed per UDF: `command_termination_timeout`, `lifetime`, `stderr_reaction`, `check_exit_code`, and `execute_direct`. The open-source default for `pool_size` is 16, whereas the Cloud default is 3. The full open-source list is in [Executable user-defined functions](/reference/functions/regular-functions/udf#executable-user-defined-functions).
 
