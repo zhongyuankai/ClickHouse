@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tags: no-parallel, no-replicated-database, no-shared-merge-tree
+# Tags: no-fasttest, no-parallel, no-replicated-database, no-shared-merge-tree
+# no-fasttest: a failpoint is server-global state, so the test must run alone, and such tests are kept out of the fast test.
 # no-parallel: the failpoint pauses `MOVE PARTITION` of all tables.
 # no-replicated-database, no-shared-merge-tree: the failpoint is in plain `MergeTree`.
 
