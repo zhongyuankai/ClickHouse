@@ -264,7 +264,7 @@ Function names must match `^[A-Za-z][A-Za-z0-9_]*$`, are unique within the organ
 
 [`TabSeparated`](/reference/formats/TabSeparated/TabSeparated) is the default and the simplest format. It requires escaping tabs, newlines, and backslashes on both sides. [`RowBinary`](/reference/formats/RowBinary/RowBinary) is binary-safe and avoids text formatting and parsing on the ClickHouse side; prefer it for large strings.
 
-With **Send chunk header** on, ClickHouse writes the number of rows as decimal text followed by `\n` before each chunk, then the rows in the configured format. The process should read exactly that many rows, write that many results, and flush once. Without it, a process that buffers output has no way to know when a block ends, and the query hangs until the read timeout. Enable it for any UDF that does not flush after every row.
+With **Send chunk header** on, ClickHouse writes the number of rows as decimal text followed by `\n` before each chunk, then the rows in the configured format. The process should read exactly that many rows, write that many results, and flush once. Without it, a process that reads a row-oriented format such as `TabSeparated`, `RowBinary`, or `JSONEachRow` and buffers its output has no way to know when a block ends, and the query hangs until the read timeout. Enable it for any such UDF that does not flush after every row. The `Native` format already carries block boundaries, so a `Native` UDF can read one block, write one block, and flush without the header.
 
 ### Network access {#network-access}
 
@@ -349,7 +349,7 @@ Code: 754. DB::Exception: User defined function 'isBusinessHours' failed. Comman
 
 Common cases:
 
-- **The query hangs, then fails with a timeout**: the process buffered its output without **Send chunk header**. Enable it and flush once per chunk.
+- **The query hangs, then fails with a timeout**: the process buffered its output in a row-oriented format without **Send chunk header**. Enable it and flush once per chunk, or flush once per block when using the `Native` format.
 - **Return code 1 with a `MemoryError` traceback (Python)**: the memory limit was exceeded. Raise **Memory limit** or reduce per-process memory.
 - **Intermittent failures with type `executable` under heavy load**: switch to `executable_pool`.
 - **Build status is error**: `main.py` (Python) or `amd64/main` and `arm64/main` (Native) is missing from the zip root, or the archive contains symlinks.
