@@ -640,19 +640,16 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
         size_t seg_range_span = seg_end - seg_begin + 1;
         size_t seg_clip_begin = std::max(seg_begin, row_offset);
         size_t seg_clip_end = std::min(seg_end + 1, row_offset + num_rows);
+        chassert(seg_clip_begin < seg_clip_end);
+        size_t seg_clip_offset = seg_clip_begin - row_offset;
+        size_t seg_clip_count = seg_clip_end - seg_clip_begin;
 
         /// Segment-level skip. If the output region for this segment is already resolved
         /// (all-ones for OR, no surviving row for AND), skip entirely — saving the I/O cost of prepareSegment.
-        if (seg_clip_begin < seg_clip_end)
+        if (canSkipRegion<op>(data + seg_clip_offset, seg_clip_count, num_applied))
         {
-            size_t clip_offset = seg_clip_begin - row_offset;
-            size_t clip_count = seg_clip_end - seg_clip_begin;
-
-            if (canSkipRegion<op>(data + clip_offset, clip_count, num_applied))
-            {
-                ++counters.segments_skipped_resolved;
-                continue;
-            }
+            ++counters.segments_skipped_resolved;
+            continue;
         }
 
         /// Skip re-preparing the segment if it is already loaded.
@@ -662,13 +659,10 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
         /// Dense segment shortcut.
         /// If every row in the segment range has a posting,
         /// pad the whole clipped range at once instead of decoding blocks.
-        if (current_segment->doc_count == seg_range_span && seg_clip_begin < seg_clip_end)
+        if (current_segment->doc_count == seg_range_span)
         {
-            size_t clip_offset = seg_clip_begin - row_offset;
-            size_t clip_count = seg_clip_end - seg_clip_begin;
-
             ++counters.segments_skipped_dense;
-            padDenseRange<op>(data + clip_offset, clip_count);
+            padDenseRange<op>(data + seg_clip_offset, seg_clip_count);
             window.extend(seg_clip_begin, seg_clip_end);
             continue;
         }
@@ -706,6 +700,8 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
             const size_t block_clip_begin = std::max(static_cast<size_t>(block_first), row_offset);
             const size_t block_clip_end = std::min(static_cast<size_t>(block_last) + 1, row_offset + num_rows);
             chassert(block_clip_begin < block_clip_end);
+            size_t block_clip_offset = block_clip_begin - row_offset;
+            size_t block_clip_count = block_clip_end - block_clip_begin;
 
             /// Level 1b: dense block shortcut. A block whose row ids are consecutive covers its whole row range,
             /// so the clipped range is padded at once instead of decoding the block.
@@ -716,13 +712,13 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
             if (static_cast<size_t>(block_last) - block_first + 1 == block_size)
             {
                 ++counters.blocks_skipped_dense;
-                padDenseRange<op>(data + (block_clip_begin - row_offset), block_clip_end - block_clip_begin);
+                padDenseRange<op>(data + block_clip_offset, block_clip_count);
                 window.extend(block_clip_begin, block_clip_end);
                 continue;
             }
 
             /// Level 2b: block-level skip (same resolved-region test as Level 2a, per block).
-            if (canSkipRegion<op>(data + (block_clip_begin - row_offset), block_clip_end - block_clip_begin, num_applied))
+            if (canSkipRegion<op>(data + block_clip_offset, block_clip_count, num_applied))
             {
                 ++counters.blocks_skipped_resolved;
                 continue;
