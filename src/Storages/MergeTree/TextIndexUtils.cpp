@@ -360,8 +360,8 @@ private:
     std::vector<PostingsMergeCursor *> active_cursors;
     /// Bitset of the current window.
     std::array<UInt64, WINDOW_ROWS / 64> window_bits{};
-    /// Source of each set bit, tracked only with positions.
-    std::array<UInt32, WINDOW_ROWS> window_sources{};
+    /// Source of each set bit, allocated and tracked only with positions.
+    std::vector<UInt32> window_sources;
     PositionsMerge * positions = nullptr;
     /// Row ids buffered for the sink.
     PaddedPODArray<UInt32> buffer;
@@ -779,12 +779,11 @@ void MergeTextIndexesTask::PostingsMergeQueue::processWindow(Window window)
         bits_summary &= bits_summary - 1;
 
         UInt64 word = std::exchange(window_bits[word_idx], 0);
-        UInt64 word_begin = window.begin + word_idx * 64;
 
         while (word)
         {
             size_t bit = word_idx * 64 + std::countr_zero(word);
-            *out++ = static_cast<UInt32>(word_begin + std::countr_zero(word));
+            *out++ = static_cast<UInt32>(window.begin + bit);
             word &= word - 1;
 
             if (positions)
@@ -911,6 +910,8 @@ void MergeTextIndexesTask::PostingsMergeQueue::merge(Sink && sink, PositionsMerg
 {
     chassert(buffer.empty());
     positions = positions_;
+    if (positions && window_sources.empty())
+        window_sources.resize(WINDOW_ROWS);
 
     if (active_cursors.size() == 1)
     {
