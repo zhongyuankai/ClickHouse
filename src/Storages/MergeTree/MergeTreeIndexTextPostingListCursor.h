@@ -137,8 +137,9 @@ private:
 
     /// Linear scan over the decoded values (`decoded_values_ptr`), resumed from the read position `index`.
     /// Moves `index` past the window and returns the range of rows written.
+    /// Inlined: `linearSegments` calls it for every decoded block.
     template <PadOp op>
-    PostingsApplyWindow linearDecoded(UInt8 * data, size_t row_offset, size_t num_rows);
+    ALWAYS_INLINE PostingsApplyWindow linearDecoded(UInt8 * data, size_t row_offset, size_t num_rows);
 
     MergeTreeReaderStream * stream = nullptr;
     const TokenPostingsInfo * info = nullptr;
