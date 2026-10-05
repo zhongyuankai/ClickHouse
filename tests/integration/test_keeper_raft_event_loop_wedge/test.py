@@ -205,6 +205,12 @@ def check_divergent_local_logs_are_reconciled(snapshot_at_common_index):
     try:
         node1.stop_clickhouse(kill=True)
         node3.stop_clickhouse(kill=True)
+        # The diverging entry; the write is expected to fail. It goes first: node2 steps down
+        # soon after losing its quorum, and only a leader appends it.
+        try:
+            zk.create(f"{root}_diverged", b"")
+        except Exception as e:
+            logging.info("the write on the leader without a quorum failed, as expected: %s", e)
         if snapshot_at_common_index:
             # Nothing can commit any more, so this is the last index the logs will share.
             snapshot_idx = keeper_utils.send_4lw_cmd(cluster, node2, cmd="csnp").strip()
@@ -214,11 +220,6 @@ def check_divergent_local_logs_are_reconciled(snapshot_at_common_index):
             node2.wait_for_log_line(
                 f"Created persistent snapshot {snapshot_idx} with path"
             )
-        # The diverging entry; the write is expected to fail.
-        try:
-            zk.create(f"{root}_diverged", b"")
-        except Exception as e:
-            logging.info("the write on the leader without a quorum failed, as expected: %s", e)
     finally:
         try:
             zk.stop()
