@@ -1,16 +1,23 @@
--- A tuple compared with a Nullable tuple that has an untyped NULL element is NULL, as without Nullable,
--- so a comparison and its negation (or its inverse operator) never both filter a row out.
+-- An untyped NULL tuple element compares like a typed NULL, with or without Nullable around the tuple:
+-- the other elements can decide the result, so a comparison and its negation never both filter a row out.
 
 SELECT (1, 2) = toNullable((1, NULL)), (1, 2) != toNullable((1, NULL)), (1, 2) < toNullable((2, NULL)),
        (1, 2) > toNullable((0, NULL)), (1, 2) <= toNullable((0, NULL)), (1, 2) >= toNullable((2, NULL));
 SELECT toNullable((1, NULL)) = (1, 2), toNullable((NULL, NULL)) = (1, 2), toNullable((1, NULL)) = toNullable((1, 2));
-SELECT ((1, 2), 3) = (toNullable((1, NULL)), 3), (toLowCardinality('a'), 1) = toNullable(('a', NULL));
-SELECT groupArray(isNull(r)) FROM (SELECT (1, 2) > if(number = 0, NULL, (0, NULL)) AS r FROM numbers(3));
-SELECT groupArray(isNull(r)) FROM (SELECT materialize((1, 2)) = materialize(toNullable((1, NULL))) AS r FROM numbers(2));
-SELECT toTypeName((1, 2) > toNullable((0, NULL)));
+SELECT ((1, 2), 3) = (toNullable((1, NULL)), 3), ((1, 2), 3) = (toNullable((1, NULL)), 4), (toLowCardinality('a'), 1) = toNullable(('a', NULL));
+SELECT (1, 2) > if(number = 0, NULL, (0, NULL)) FROM numbers(3);
+SELECT materialize((1, 2)) = materialize(toNullable((number, NULL))) FROM numbers(3);
+SELECT toTypeName((1, 2) > toNullable((0, NULL))), toTypeName((1, 2) = (3, NULL));
 
--- Not affected: null-safe comparison and a typed NULL element.
-SELECT (1, NULL) <=> toNullable((1, NULL)), (1, 2) <=> toNullable((1, NULL)), (1, 2) > toNullable((0, NULL::Nullable(Int32)));
+-- Decided by another element.
+SELECT (1, 2) = toNullable((3, NULL)), (1, 2) != toNullable((3, NULL)), (1, 2) = (3, NULL), (1, 2) != (3, NULL);
+SELECT (1, 2) < (2, NULL), (1, 2) > (0, NULL), (1, 2) <= (0, NULL), (1, 2) >= (2, NULL), (1, 2) < (1, NULL);
+SELECT ([1], 2) = (NULL, 3), ([1], 2) != (NULL, 3), (map(1, 2), 1) != (NULL, 2), (NULL, 1) = (NULL, 2), (NULL, 1) = (NULL, 1);
+SELECT materialize((1, 2)) = materialize(toNullable((3, NULL))), materialize((1, 2)) != materialize(toNullable((3, NULL)));
+
+-- Same as a typed NULL element, and null-safe comparison is not affected.
+SELECT (1, 2) = (3, CAST(NULL, 'Nullable(UInt8)')), (1, 2) != (3, CAST(NULL, 'Nullable(UInt8)'));
+SELECT (1, NULL) <=> toNullable((1, NULL)), (1, 2) <=> toNullable((1, NULL)), (1, 2) <=> (3, NULL), (1, 2) > toNullable((0, NULL::Nullable(Int32)));
 
 -- p, NOT p and p IS NULL together count every row; `_partition_value` filters parts by the inverted comparison.
 DROP TABLE IF EXISTS tbl;
@@ -32,6 +39,11 @@ SELECT
     (SELECT count() FROM tbl WHERE _partition_value = toNullable((toDate('2021-04-01'), NULL, NULL))),
     (SELECT count() FROM tbl WHERE NOT (_partition_value = toNullable((toDate('2021-04-01'), NULL, NULL)))),
     (SELECT count() FROM tbl WHERE isNull(_partition_value = toNullable((toDate('2021-04-01'), NULL, NULL))))
+SETTINGS optimize_use_implicit_projections = 0, optimize_trivial_count_query = 0;
+SELECT
+    (SELECT count() FROM tbl WHERE _partition_value != (toDate('2021-04-02'), NULL, NULL)),
+    (SELECT count() FROM tbl WHERE NOT (_partition_value != (toDate('2021-04-02'), NULL, NULL))),
+    (SELECT count() FROM tbl WHERE isNull(_partition_value != (toDate('2021-04-02'), NULL, NULL)))
 SETTINGS optimize_use_implicit_projections = 0, optimize_trivial_count_query = 0;
 SELECT countMerge(s) FROM (
     SELECT countState() AS s FROM tbl WHERE _partition_value > toNullable((toDate('2021-04-01'), NULL, NULL))
