@@ -1,4 +1,5 @@
 -- Tags: long, no-debug, no-parallel, no-fasttest, no-msan, no-tsan
+-- Random settings limits: optimize_trivial_count_query=(1, None)
 -- This test is slow under MSan or TSan.
 
 DROP TABLE IF EXISTS index_memory;
