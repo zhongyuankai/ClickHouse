@@ -42192,6 +42192,10 @@
     "source": "/use-cases/observability/clickstack/migration"
   },
   {
+    "destination": "/clickstack/migration/datadog",
+    "source": "/use-cases/observability/clickstack/migration/datadog"
+  },
+  {
     "destination": "/clickstack/migration/elastic",
     "source": "/use-cases/observability/clickstack/migration/elastic"
   },
