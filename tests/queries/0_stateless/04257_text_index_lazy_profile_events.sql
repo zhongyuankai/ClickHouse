@@ -98,8 +98,7 @@ SELECT count() FROM tab_lazy_pe WHERE hasAnyTokens(s, ['adense', 'csubset'])
 
 -- Q4: hasAnyTokens(['csubset', 'fhalf']) -> csubset (density 1.0) sorts before fhalf
 --     (density 0.5). csubset fills bits 0..299; fhalf's segment [0..510] is not fully
---     covered, but its packed block 0 (doc range 0..254) IS. The block is not dense,
---     so the dense-block shortcut, which goes first, does not take it.
+--     covered, but its packed block 0 (doc range 0..254) IS.
 --     Triggers: BlocksSkippedResolved (OR side).
 SELECT count() FROM tab_lazy_pe WHERE hasAnyTokens(s, ['csubset', 'fhalf'])
     SETTINGS log_comment = '04257_pe_or_block_covered';

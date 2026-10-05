@@ -704,9 +704,15 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
             size_t block_clip_offset = block_clip_begin - row_offset;
             size_t block_clip_count = block_clip_end - block_clip_begin;
 
-            /// Level 1b: dense block shortcut. A block whose row ids are consecutive covers its whole row range,
+            /// Block-level skip (same resolved-region test as the segment-level one, per block).
+            if (canSkipRegion<op>(data + block_clip_offset, block_clip_count, num_applied))
+            {
+                ++stats.blocks_skipped_resolved;
+                continue;
+            }
+
+            /// Dense block shortcut. A block whose row ids are consecutive covers its whole row range,
             /// so the clipped range is padded at once instead of decoding the block.
-            /// It goes before Level 2b: padding at most a block of rows is cheaper than the resolved-region test.
             const bool is_tail_block = block_idx + 1 == block_count && current_segment->tail_size > 0;
             const size_t block_size = is_tail_block ? current_segment->tail_size : IPostingListBlockCodec::BLOCK_SIZE;
 
@@ -715,13 +721,6 @@ PostingsApplyWindow PostingListCursor::linearSegments(UInt8 * data, size_t row_o
                 ++stats.blocks_skipped_dense;
                 padDenseRange<op>(data + block_clip_offset, block_clip_count);
                 window.extend(block_clip_begin, block_clip_end);
-                continue;
-            }
-
-            /// Level 2b: block-level skip (same resolved-region test as Level 2a, per block).
-            if (canSkipRegion<op>(data + block_clip_offset, block_clip_count, num_applied))
-            {
-                ++stats.blocks_skipped_resolved;
                 continue;
             }
 
