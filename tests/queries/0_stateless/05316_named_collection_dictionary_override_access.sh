@@ -109,7 +109,7 @@ ${CLICKHOUSE_CLIENT} --multiquery --query "
 "
 
 echo 'A stored table whose override became NOT OVERRIDABLE is rejected when it is attached'
-# A __fuzz_N clone of these tables would stay attached while its key is locked.
+# The fuzzer stays off for all DDL of these tables: a __fuzz_N clone would stay attached while its key is locked.
 ${CLICKHOUSE_CLIENT} --multiquery --query "
     SET ast_fuzzer_any_query = 0;
     CREATE NAMED COLLECTION $nc_mysql AS
@@ -130,16 +130,18 @@ function attach_is_rejected()
     local key=$3
     local value=$4
     ${CLICKHOUSE_CLIENT} --multiquery --query "
+        SET ast_fuzzer_any_query = 0;
         DETACH TABLE $table PERMANENTLY;
         ALTER NAMED COLLECTION $collection SET $key = $value NOT OVERRIDABLE;
     "
-    if error=$(${CLICKHOUSE_CLIENT} --query "ATTACH TABLE $table" 2>&1); then
+    if error=$(${CLICKHOUSE_CLIENT} --multiquery --query "SET ast_fuzzer_any_query = 0; ATTACH TABLE $table" 2>&1); then
         echo "Expected the attach of $table to be rejected"
         exit 1
     fi
     echo "$error" | grep -o "Override not allowed for '$key'" | head -1
     echo "$error" | grep -o 'BAD_ARGUMENTS' | head -1
     ${CLICKHOUSE_CLIENT} --multiquery --query "
+        SET ast_fuzzer_any_query = 0;
         ALTER NAMED COLLECTION $collection SET $key = $value OVERRIDABLE;
         ATTACH TABLE $table;
     "
