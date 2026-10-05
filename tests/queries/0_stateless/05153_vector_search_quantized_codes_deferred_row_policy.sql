@@ -3,10 +3,12 @@
 -- parallel replicas, so the plan-shape assertion below cannot hold there.
 
 -- `ReadFromMergeTree::addReadColumn` pulls the `vec.quantized` companion subcolumn into the read
--- after query analysis, so the subcolumn has to be passed through every filter `ActionsDAG` that
--- the read replays - otherwise it is dropped before the shortlist expression can rank on it. With
--- `FINAL` the row policy is not applied during reading but replayed by `FilterTransform` after
--- merging, from a separate deferred carrier, and that carrier needs the passthrough as well.
+-- after query analysis, so the subcolumn has to be passed through the active row-level filter and
+-- PREWHERE `ActionsDAG`s that the read replays - their headers only keep the outputs they were built
+-- with, so otherwise it is dropped before the shortlist expression can rank on it. With `FINAL` the
+-- row policy is not applied during reading but replayed by `FilterTransform` after merging, from a
+-- separate deferred carrier. That path does not need the passthrough: `FilterTransform` keeps input
+-- columns that its `ActionsDAG` does not use. This test checks the subcolumn survives it.
 
 DROP ROW POLICY IF EXISTS 05153_vector_row_policy ON tab_vec_quantized_row_policy;
 DROP TABLE IF EXISTS tab_vec_quantized_row_policy;
