@@ -823,7 +823,7 @@ TEST(Statistics, BasicDefaultCountRoundTrip)
 
     /// A `String` column: the total byte length of the values.
     {
-        auto string_type = std::make_shared<DataTypeString>();
+        auto string_type = DataTypeFactory::instance().get("String");
         auto rewritten = load_legacy_and_rewrite(string_type, string_length_sum, [](WriteBuffer & buf)
         {
             writeIntBinary(static_cast<UInt64>(2890), buf);
