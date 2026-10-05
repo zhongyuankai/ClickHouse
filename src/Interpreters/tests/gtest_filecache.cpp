@@ -3958,6 +3958,12 @@ TEST(FileCacheReserveAhead, GrowsUpToLimitAndResets)
 
     reserve_ahead.reset();
     ASSERT_EQ(reserve_ahead.getReserveSize(2, 100, 16), 2u);
+
+    /// A short first request does not keep the reserve-ahead small for later, larger requests.
+    reserve_ahead.reset();
+    ASSERT_EQ(reserve_ahead.getReserveSize(2, 1000, 1024), 2u);
+    ASSERT_EQ(reserve_ahead.getReserveSize(100, 1000, 1024), 100u);
+    ASSERT_EQ(reserve_ahead.getReserveSize(100, 1000, 1024), 200u);
 }
 
 TEST_F(FileCacheTest, DynamicReserveGranularity)

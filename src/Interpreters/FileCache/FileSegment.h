@@ -35,7 +35,7 @@ struct FileCacheReserveAhead
     size_t getReserveSize(size_t size_to_reserve, size_t segment_reserve_limit, size_t max_reserve_granularity)
     {
         const size_t result = std::max(size_to_reserve, std::min({granularity, max_reserve_granularity, segment_reserve_limit}));
-        granularity = std::min(max_reserve_granularity, granularity ? granularity * 2 : size_to_reserve * 2);
+        granularity = std::min(max_reserve_granularity, std::max(granularity, size_to_reserve) * 2);
         return result;
     }
 
