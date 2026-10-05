@@ -53468,6 +53468,46 @@
     "destination": "/products/cloud/api-reference/query-api-endpoints/update-a-query-api-endpoint"
   },
   {
+    "source": "/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/ar/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/ar/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/es/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/es/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/fr/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/fr/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/ja/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/ja/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/ko/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/ko/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/pt-BR/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/pt-br/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/pt-br/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/pt-br/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/ru/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/ru/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
+    "source": "/zh/products/cloud/api-reference/prometheus/organization-prometheus-discovery-get",
+    "destination": "/zh/products/cloud/api-reference/prometheus/list-prometheus-scrape-targets"
+  },
+  {
     "destination": "/products/cloud/api-reference/:path*",
     "source": "/api-reference/:path*"
   },
