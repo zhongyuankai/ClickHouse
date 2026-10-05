@@ -192,8 +192,7 @@ You have successfully added your first user-defined function via the console, co
 
 The Native runtime lets you upload a precompiled binary instead of a Python script. Set **Runtime type** to **Native** when creating the UDF (`runtime: native` in the API). Nothing is installed in the sandbox for you; everything the binary needs must be compiled in.
 
-Any toolchain that produces a suitable Linux executable can be used. Examples are Rust, Go, C++, and JavaScript compiled to a binary with Bun.
-{/* CONFIRM with @zach.naimon: the pinned Bun version and build target, and whether the supported list is exactly these four. */}
+Supported today: Rust, Go, C++, and JavaScript compiled to a binary with Bun. Bun has been tested with versions 1.4.0 and 1.4.2; other versions may not work.
 
 The archive must contain one executable per CPU architecture, each in its own folder:
 
@@ -209,8 +208,7 @@ my-udf.zip
 
 Both architectures are required because ClickHouse Cloud services run on both. The executable must be named exactly `main` and is run with no arguments; pass a mode or sub-command as a normal function argument instead.
 
-Binaries must be statically linked.
-{/* CONFIRM with @zach.naimon: engineering also allowed dynamically linked binaries against the host's standard libraries. Document whichever rule is final, with the host glibc caveat if dynamic linking is allowed. */}
+Statically linked binaries are strongly recommended: they do not depend on the host's system libraries, whose system calls can differ between server versions, and the sandbox's system call policy is tuned for them. Dynamically linked binaries work only if they link against glibc alone and were built against glibc 2.35 or older. JavaScript compiled with Bun is always dynamically linked.
 
 <Warning>
 **Resolve data files relative to the executable**
