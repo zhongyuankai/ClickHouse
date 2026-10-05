@@ -10,7 +10,9 @@
 #include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeMapHelpers.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/getLeastSupertype.h>
 
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionLowCardinalityFastPath.h>
@@ -29,6 +31,7 @@
 
 #include <Core/Settings.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/castColumn.h>
 
 #include <ranges>
 
@@ -674,14 +677,9 @@ class FunctionMapRemove final : public IFunction
 public:
     static constexpr auto name = "mapRemove";
 
-    static FunctionPtr create(ContextPtr context)
+    static FunctionPtr create(ContextPtr)
     {
-        return std::make_shared<FunctionMapRemove>(context);
-    }
-
-    explicit FunctionMapRemove(const ContextPtr & context)
-        : is_distinct_from_resolver(FunctionFactory::instance().get("isDistinctFrom", context))
-    {
+        return std::make_shared<FunctionMapRemove>();
     }
 
     String getName() const override { return name; }
@@ -699,11 +697,9 @@ public:
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "First argument for function {} must be a Map, found {}", getName(), arguments[0]->getName());
 
-        const auto key_type = recursiveRemoveLowCardinality(map_type->getKeyType());
-        const auto remove_key_type = recursiveRemoveLowCardinality(arguments[1]);
-        is_distinct_from_resolver->getReturnType({
-            {nullptr, key_type, "key"},
-            {nullptr, remove_key_type, "remove_key"}});
+        getLeastSupertype(DataTypes{
+            recursiveRemoveLowCardinality(map_type->getKeyType()),
+            recursiveRemoveLowCardinality(arguments[1])});
         return arguments[0];
     }
 
@@ -725,21 +721,20 @@ public:
         auto remove_key_type = recursiveRemoveLowCardinality(arguments[1].type);
         auto replicated_remove_key = remove_key_column->replicate(offsets);
 
-        const size_t map_elements_count = key_column->size();
-        ColumnsWithTypeAndName comparison_arguments{
-            {key_column, key_type, "key"},
-            {replicated_remove_key, remove_key_type, "remove_key"}};
+        const auto comparison_type = getLeastSupertype(DataTypes{key_type, remove_key_type});
+        key_column = castColumn(ColumnWithTypeAndName{key_column, key_type, "key"}, comparison_type);
+        replicated_remove_key = castColumn(
+            ColumnWithTypeAndName{replicated_remove_key, remove_key_type, "remove_key"}, comparison_type);
 
-        auto comparison = is_distinct_from_resolver->build(comparison_arguments);
-        auto filter = comparison->execute(
-            comparison_arguments, comparison->getResultType(), map_elements_count, /* dry_run = */ false);
+        const size_t map_elements_count = key_column->size();
+        auto filter = ColumnUInt8::create(map_elements_count);
+        auto & filter_data = filter->getData();
+        for (size_t i = 0; i < map_elements_count; ++i)
+            filter_data[i] = static_cast<UInt8>(!mapKeyEquals(*key_column, i, *replicated_remove_key, i));
 
         auto filtered_nested_map = ArrayFilterImpl::execute(nested_map, std::move(filter));
         return ColumnMap::create(std::move(filtered_nested_map));
     }
-
-private:
-    FunctionOverloadResolverPtr is_distinct_from_resolver;
 };
 
 REGISTER_FUNCTION(MapMiscellaneous)
