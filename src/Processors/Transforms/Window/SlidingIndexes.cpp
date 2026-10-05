@@ -30,12 +30,12 @@ void markKeyChangesInRange(const Columns & columns, const std::vector<size_t> & 
     }
 }
 
-std::vector<bool> markKeyChanges(const Columns & columns, size_t rows_count, const std::vector<size_t> & key_indices, const std::optional<Columns> & previous_key)
+std::vector<bool> markPartitionStarts(const Columns & columns, size_t rows_count, const std::vector<size_t> & partition_by_indices, const std::optional<Columns> & previous_partition_key)
 {
-    std::vector<bool> changes(rows_count, false);
-    changes[0] = !previous_key || !haveSameKeys(*previous_key, 0, columns, 0, key_indices);
-    markKeyChangesInRange(columns, key_indices, 0, rows_count, changes);
-    return changes;
+    std::vector<bool> starts(rows_count, false);
+    starts[0] = !previous_partition_key || !haveSameKeys(*previous_partition_key, 0, columns, 0, partition_by_indices);
+    markKeyChangesInRange(columns, partition_by_indices, 0, rows_count, starts);
+    return starts;
 }
 
 std::vector<bool> markPeerGroupStarts(
@@ -84,12 +84,11 @@ SlidingIndexes::SlidingIndexes(const WindowTransformParams & params_)
 
 SlidingIndex SlidingIndexes::calculate(const Columns & materialized_columns, int64_t rows_count)
 {
-    auto partition_starts = markKeyChanges(materialized_columns, rows_count, params.partition_by_indices, last_partition_key);
+    auto partition_starts = markPartitionStarts(materialized_columns, rows_count, params.partition_by_indices, last_partition_key);
     last_partition_key = cutLastKey(materialized_columns, rows_count, params.partition_by_indices);
 
     auto peer_group_starts = markPeerGroupStarts(materialized_columns, rows_count, params, partition_starts, last_order_key);
-    if (params.window_description.frame.type != WindowFrame::FrameType::ROWS)
-        last_order_key = cutLastKey(materialized_columns, rows_count, params.order_by_indices);
+    last_order_key = cutLastKey(materialized_columns, rows_count, params.order_by_indices);
 
     return SlidingIndex{
         .partition_starts = std::move(partition_starts),
