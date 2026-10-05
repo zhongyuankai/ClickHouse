@@ -674,6 +674,7 @@ void QueryPlan::explainPlan(
         .compact = options.compact,
         .pretty = options.pretty,
         .inside_explain_analyze = steps_to_stats != nullptr,
+        .show_secrets = options.show_secrets,
         .pretty_names = plan_pretty_names ? plan_pretty_names->pretty_names : empty_pretty_names.pretty_names,
         .runtime_filter_names = plan_pretty_names ? plan_pretty_names->runtime_filter_names : empty_pretty_names.runtime_filter_names
     };

@@ -158,6 +158,12 @@ namespace QueryPlanFormat
         SecretRendering secrets,
         int parent_precedence = 0);
 
+    String formatNodePretty(const ActionsDAG::Node * node, const ExplainFormatSettings & settings, PrettySetNameMap & subquery_set_names)
+    {
+        const auto secrets = settings.show_secrets ? SecretRendering::ShowAll : SecretRendering::HideSecrets;
+        return formatNodePretty(node, settings.pretty_names, settings.runtime_filter_names, subquery_set_names, secrets);
+    }
+
     static PrettyColumnName formatFilterPretty(
         const ActionsDAG & dag,
         const String & column_name,
