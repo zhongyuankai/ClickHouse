@@ -572,7 +572,11 @@ NearestNeighbours MergeTreeIndexConditionVectorSimilarity::calculateApproximateN
     /// The way to do this in USearch is to call index_dense_gt::change_expansion_search. Unfortunately, this introduces a need to
     /// synchronize index access, see https://github.com/unum-cloud/usearch/issues/500. As a workaround, we extended USearch' search method
     /// to accept a custom expansion_add setting. The config value is only used on the fly, i.e. not persisted in the index.
-    auto search_result = index->search(parameters->reference_vector.data(), limit, USearchIndex::any_thread(), false, expansion_search);
+    /// USearch reserves memory for max(limit, expansion) candidates, and neither can change the result beyond the number of vectors.
+    const size_t index_size = index->size();
+    limit = std::min(limit, index_size);
+    const size_t expansion = std::min(expansion_search, index_size);
+    auto search_result = index->search(parameters->reference_vector.data(), limit, USearchIndex::any_thread(), false, expansion);
     if (!search_result)
         throw Exception(ErrorCodes::INCORRECT_DATA, "Could not search in vector similarity index. Error: {}", search_result.error.release());
 
