@@ -36,7 +36,6 @@ namespace ErrorCodes
 }
 
 
-
 NativeReader::NativeReader(
     ReadBuffer & istr_,
     UInt64 server_revision_,

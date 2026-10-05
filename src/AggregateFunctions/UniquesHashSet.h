@@ -667,9 +667,10 @@ private:
       * but a frequent value can be a candidate too (e.g. the hash of zero is zero), so a run
       * of the same value is recorded only once.
       */
-    struct WideCandidates
+    /// `values` is intentionally left uninitialized: only the first `size` entries are read.
+    struct WideCandidates // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
     {
-        std::array<Value, 16> values; // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init) - only the first `size` entries are read
+        std::array<Value, 16> values; // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
         size_t size = 0;
         /// The position to rescan from, if `values` has overflowed (pathological input).
         size_t overflow_position = 0;
