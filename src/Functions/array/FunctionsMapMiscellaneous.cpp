@@ -741,9 +741,17 @@ public:
 
             if (const auto * const_remove_key = checkAndGetColumn<ColumnConst>(replicated_remove_key.get()))
             {
-                const auto & remove_key_data = const_remove_key->getDataColumn();
+                PaddedPODArray<Int8> compare_results;
+                key_column->compareColumn(
+                    const_remove_key->getDataColumn(),
+                    0,
+                    nullptr,
+                    compare_results,
+                    /* direction = */ 1,
+                    /* nan_direction_hint = */ 1);
+
                 for (size_t i = 0; i < map_elements_count; ++i)
-                    keep_data[i] = static_cast<UInt8>(key_column->compareAt(i, 0, remove_key_data, 1) != 0);
+                    keep_data[i] = static_cast<UInt8>(compare_results[i] != 0);
             }
             else
             {
@@ -757,6 +765,7 @@ public:
         {
             /// Preserve comparison support for types such as mixed signed/unsigned arrays, where
             /// FunctionComparison has a dedicated path even though no least supertype exists.
+            /// This fallback uses isDistinctFrom semantics, which treat NaN values as distinct.
             ColumnsWithTypeAndName comparison_arguments{
                 {key_column, key_type, "key"},
                 {replicated_remove_key, remove_key_type, "remove_key"}};
@@ -916,7 +925,7 @@ Filters a map by applying a function to each map element.
     FunctionDocumentation::Description description_mapRemove = R"(
 Removes all entries from a map whose key equals the specified key. If several entries have the same key, all matching entries are removed.
 NULLs are compared as values: a NULL removal key does not match a non-NULL key, and NULL components in composite keys match other NULL components.
-NaN keys follow map lookup semantics, so a NaN removal key matches a NaN map key.
+For key types with a common supertype, NaN keys follow map lookup semantics, so a NaN removal key matches a NaN map key.
 )";
     FunctionDocumentation::Syntax syntax_mapRemove = "mapRemove(map, key)";
     FunctionDocumentation::Arguments arguments_mapRemove = {
