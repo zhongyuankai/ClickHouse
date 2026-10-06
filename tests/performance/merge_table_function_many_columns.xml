@@ -107,8 +107,8 @@
         ADD COLUMN c{i}_63 UInt8</create_query>
     <fill_query>INSERT INTO merge_many_columns (c) VALUES (1)</fill_query>
 
-    <query>SELECT count() FROM merge(currentDatabase(), '^merge_many_columns$')</query>
-    <query>SELECT sum(c0_0) FROM merge(currentDatabase(), '^merge_many_columns$')</query>
+    <!-- 20 merge() queries timed as one, so that the measured time is above 0.1 s. -->
+    <query file="merge_table_function_many_columns.sql"/>
 
     <drop_query>DROP TABLE IF EXISTS merge_many_columns</drop_query>
 </test>
