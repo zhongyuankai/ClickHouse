@@ -1,5 +1,5 @@
--- Tags: no-parallel
--- no-parallel: enables a global failpoint.
+-- Tags: no-parallel, no-fasttest
+-- no-parallel, no-fasttest: enables a global failpoint.
 
 DROP TABLE IF EXISTS t;
 
