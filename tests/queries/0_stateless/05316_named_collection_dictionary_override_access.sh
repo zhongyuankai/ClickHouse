@@ -28,9 +28,9 @@ function cleanup()
             ATTACH TABLE $table;
         "
     done
-    # A fuzzed DETACH of an ignored DROP TABLE would outlive the DROP NAMED COLLECTION below, and a restart could not load it.
+    # Neither ignore nor fuzz these drops: each object must be gone before the named collection it references.
     ${CLICKHOUSE_CLIENT} --multiquery --query "
-        SET ast_fuzzer_any_query = 0;
+        SET ast_fuzzer_any_query = 0, ignore_drop_queries_probability = 0;
         DROP DICTIONARY IF EXISTS dict_override;
         DROP DICTIONARY IF EXISTS dict_add_key;
         DROP DICTIONARY IF EXISTS dict_alias;
