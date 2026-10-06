@@ -245,12 +245,20 @@ def assert_seeded_rows(node, db_name, table):
 
 def uc_api_post(node, route, payload):
     """Registers objects the seeded data does not provide, such as a CSV table."""
+    return uc_api_request(node, "POST", route, json.dumps(payload).encode())
+
+
+def uc_api_delete(node, route):
+    return uc_api_request(node, "DELETE", route)
+
+
+def uc_api_request(node, method, route, data=None):
     script = f"""
 import json, urllib.request
 request = urllib.request.Request(
     {UC_URL + "/" + route!r},
-    data={json.dumps(payload)!r}.encode(),
-    method="POST",
+    data={data!r},
+    method={method!r},
     headers={{"Content-Type": "application/json"}},
 )
 print(urllib.request.urlopen(request).status)
@@ -549,15 +557,20 @@ SETTINGS warehouse = '{CATALOG}', catalog_type = 'unity', {V2_SETTING} = {use_v2
     )
     table = f"{db_name}.`{schema_name}.{table_name}`"
 
-    proxy_control(node, "reset_credential_operations")
-    node.query(f"SELECT count() FROM {table}")
-    assert set(json.loads(proxy_control(node, "credential_operations"))) == {"READ"}
+    try:
+        proxy_control(node, "reset_credential_operations")
+        node.query(f"SELECT count() FROM {table}")
+        assert set(json.loads(proxy_control(node, "credential_operations"))) == {"READ"}
 
-    proxy_control(node, "reset_credential_operations")
-    node.query(f"INSERT INTO {table} VALUES (1, 'a'), (2, 'b')", settings=DELTA_WRITE_SETTINGS)
-    assert "READ_WRITE" in json.loads(proxy_control(node, "credential_operations"))
+        proxy_control(node, "reset_credential_operations")
+        node.query(f"INSERT INTO {table} VALUES (1, 'a'), (2, 'b')", settings=DELTA_WRITE_SETTINGS)
+        assert "READ_WRITE" in json.loads(proxy_control(node, "credential_operations"))
 
-    assert node.query(f"SELECT * FROM {table} ORDER BY id") == "1\ta\n2\tb\n"
+        assert node.query(f"SELECT * FROM {table} ORDER BY id") == "1\ta\n2\tb\n"
+    finally:
+        node.query(f"DROP DATABASE IF EXISTS {db_name}")
+        uc_api_delete(node, f"tables/{CATALOG}.{schema_name}.{table_name}")
+        uc_api_delete(node, f"schemas/{CATALOG}.{schema_name}")
 
 
 def test_pat_token_authentication(started_cluster):
