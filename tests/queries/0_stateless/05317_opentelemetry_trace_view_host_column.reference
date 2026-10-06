@@ -6,5 +6,5 @@ query	INTERNAL	initiator
    └─ DistributedPlanTask::execute	SERVER	worker-2
 === the spans of one node ===
    └─ DistributedPlanTask::execute	worker-2
-=== a real trace is recorded under the server's own FQDN ===
-every span carries fqdn(): OK
+=== a real trace carries the hostname of the span log ===
+every host is a hostname of the span log: OK
