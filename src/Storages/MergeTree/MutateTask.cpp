@@ -3842,8 +3842,10 @@ private:
 
     bool isRowsMaxTTLExpired() const
     {
-        const auto ttl = ctx->new_data_part->ttl_infos.table_ttl;
-        return ttl.max && ttl.max <= ctx->time_of_mutation;
+        const auto & ttl = ctx->new_data_part->ttl_infos.table_ttl;
+        /// A part holding rows whose TTL computed to exactly the epoch is not fully expired even if
+        /// its stored bounds are: those rows are excluded from the bounds and are never expired.
+        return ttl.max && ttl.max <= ctx->time_of_mutation && !ttl.has_epoch_timestamps;
     }
 
     void replacePartWithEmpty()
