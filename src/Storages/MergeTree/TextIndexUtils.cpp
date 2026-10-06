@@ -799,7 +799,7 @@ void MergeTextIndexesTask::PostingsMergeQueue::processWindow(Window window)
         }
     }
 
-    if (run_length != 0)
+    if (positions && run_length != 0)
         positions->append(run_source, run_length);
 
     size_t num_distinct = out - (buffer.data() + old_size);
