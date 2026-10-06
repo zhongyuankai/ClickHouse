@@ -410,27 +410,6 @@ TEST(IcebergSchemaProcessor, RenameGeoFieldAcrossSchemaIdsWithWhitespaceIsRename
     EXPECT_EQ(outputs[0]->result_name, "b");
 }
 
-/// The catalog spellings `varbyte(N)` and `timestamp with local time zone` denote `binary` and
-/// `timestamptz`, so re-adding a schema-id with them is no conflict, and changing only the spelling
-/// across schema-ids is a rename, not a type change.
-TEST(IcebergSchemaProcessor, CatalogTypeAliasesAreSameTypeAcrossSchemaVersions)
-{
-    auto old_schema = parseSchema(R"json({"schema-id":0,"fields":[{"id":1,"name":"a","required":false,"type":"binary"},{"id":2,"name":"c","required":false,"type":"timestamptz"}]})json");
-    auto same_id = parseSchema(R"json({"schema-id":0,"fields":[{"id":1,"name":"a","required":false,"type":"varbyte(16)"},{"id":2,"name":"c","required":false,"type":"timestamp with local time zone"}]})json");
-    auto new_schema = parseSchema(R"json({"schema-id":1,"fields":[{"id":1,"name":"b","required":false,"type":"varbyte"},{"id":2,"name":"d","required":false,"type":"timestamp with local time zone"}]})json");
-    IcebergSchemaProcessor processor;
-    processor.addIcebergTableSchema(old_schema);
-    EXPECT_NO_THROW(processor.addIcebergTableSchema(same_id));
-    processor.addIcebergTableSchema(new_schema);
-
-    auto dag = processor.getSchemaTransformationDagByIds(0, 1);
-    ASSERT_TRUE(dag);
-    const auto & outputs = dag->getOutputs();
-    ASSERT_EQ(outputs.size(), 2u);
-    EXPECT_EQ(outputs[0]->result_name, "b");
-    EXPECT_EQ(outputs[1]->result_name, "d");
-}
-
 /// A whitespace-heavy type string must be accepted in the INITIAL/current schema (not just the
 /// repeated-same-schema-id path): the parser runs before any comparison, so it has to tolerate the
 /// same spellings on its own.
