@@ -624,17 +624,12 @@ class JobConfigs:
         Job.ParamSet(
             parameter=BuildTypes.ARM_FUZZERS,
             provides=[],
-            # The ~18 fuzzers each statically link the whole of ClickHouse with its own
-            # copy of the ASan+debug DWARF, ~94 GiB of build output, which does not fit in
-            # the ~135 GiB free on `amd-large` (`m7i.8xlarge`), so this has to build on
-            # `arm-large`.
-            #
-            # The fuzzers target AArch64 rather than x86-64 for the reach of the small code
-            # model. `clickhouse_fuzzer` is a single image of every `src/` library with
-            # SanitizerCoverage and ASan instrumentation, and on x86-64 it kept outgrowing
-            # the 2 GiB of `R_X86_64_PC32`, failing the link with `relocation R_X86_64_PC32
-            # out of range`. On AArch64 data is addressed with `ADRP` (4 GiB), and `lld`
-            # inserts range extension thunks for calls, which it does not do on x86-64.
+            # Targets aarch64: each fuzzer statically links all of ClickHouse with ASan
+            # and SanitizerCoverage, and that image's allocated sections already exceed
+            # 2 GiB - out of reach of x86-64's 32-bit displacements, which lld cannot
+            # repair with thunks, while aarch64 addresses +-4 GiB and does thunk calls.
+            # The ~94 GiB of build output also does not fit the ~135 GiB free on
+            # `amd-large` (`m7i.8xlarge`).
             runs_on=RunnerLabels.ARM_LARGE,
         ),
     )

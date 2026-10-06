@@ -1,5 +1,5 @@
 """
-Regression tests for NightlyFuzzers sharing MasterCI's ARM release build.
+Regression tests for NightlyFuzzers sharing MasterCI's AMD release build.
 
 NightlyFuzzers needs the release binary to generate the fuzzer dictionary, and
 gets it by reusing the build MasterCI already ran for the same commit. Three
@@ -11,9 +11,8 @@ things have to line up for that, and all three were wrong:
     release_build_jobs_with_examples, which appends --build-examples and
     CLICKHOUSE_EXAMPLES to the ARM release job, so a workflow taking the plain
     release_build_jobs variant hashes differently for that job. The shared build
-    is the ARM one, because the fuzzers run on AArch64, so NightlyFuzzers has to
-    take it from the with-examples list as MasterCI does, and the arms below pin
-    that rather than assume it.
+    is the AMD one, where the two lists still agree, so the arms below pin that
+    agreement rather than assume it.
 
   - The long-retention tags are part of those artifact configs, so an untagged
     upload misses the cache. It cannot damage MasterCI's own upload: the S3 prefix
@@ -177,23 +176,24 @@ class TestBuildIsSharedWithMasterCI:
         )
         assert _config_digest(job, untagged) != _config_digest(job, nightly_workflow)
 
-    def test_the_shared_build_takes_the_examples_wiring(self):
-        # It is appended to the ARM release job only, so the plain and the
-        # with-examples list disagree on the job the two workflows share, and
-        # taking the plain variant would miss MasterCI's cache entry.
+    def test_the_examples_wiring_reaches_both_sides_or_neither(self):
+        # The suffix is appended to the ARM release job only, and that is the job
+        # the two workflows share, so both must take it from the same list. A
+        # workflow switched back to the plain list would keep the name and lose
+        # the cache entry.
         with_examples = [
             j.name
             for j in JobConfigs.release_build_jobs_with_examples
             if "--build-examples" in j.command
         ]
-        assert _SHARED_BUILD in with_examples
-        assert "--build-examples" in _job(nightly_workflow, _SHARED_BUILD).command
-        plain = [
-            j.name
-            for j in JobConfigs.release_build_jobs
-            if "--build-examples" in j.command
-        ]
-        assert _SHARED_BUILD not in plain, "the two lists agree: this arm is vacuous"
+        assert with_examples, "no job takes the examples: this arm is vacuous"
+        nightly, master = _mangled("NightlyFuzzers"), _mangled("MasterCI")
+        assert (
+            _job(nightly, _SHARED_BUILD).command == _job(master, _SHARED_BUILD).command
+        )
+        assert sorted(_job(nightly, _SHARED_BUILD).provides) == sorted(
+            _job(master, _SHARED_BUILD).provides
+        )
 
     def test_what_the_shared_build_provides_is_declared(self):
         # An artifact a job provides but the workflow does not declare has
