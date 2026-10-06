@@ -952,6 +952,9 @@ String DatabaseDataLake::getDefaultTableEngineName(const String & name) const
     const auto catalog_storage_type = catalog->getStorageType();
     if (!table_metadata && !catalog_storage_type)
     {
+        if (!catalog->assignsLocationToNewNamespaces())
+            throw cannotTellNewTableLocation(name);
+
         catalog->createNamespaceIfNotExists(namespace_name);
         table_metadata = tryGetNewTableMetadata(settings, *catalog, name);
         if (!table_metadata)
@@ -994,6 +997,9 @@ ASTs DatabaseDataLake::getEngineArgsForNewTable(const String & name, ObjectStora
     {
         if (const auto catalog_storage_type = catalog->getStorageType(); catalog_storage_type && *catalog_storage_type != engine_type)
             throw storage_mismatch(*catalog_storage_type);
+
+        if (!catalog->assignsLocationToNewNamespaces())
+            throw cannotTellNewTableLocation(name);
 
         catalog->createNamespaceIfNotExists(namespace_name);
         table_metadata = tryGetNewTableMetadata(settings, *catalog, name);

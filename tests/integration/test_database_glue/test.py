@@ -908,6 +908,31 @@ def test_create_without_engine_arguments_no_database_location(started_cluster, e
     assert table_name not in node.query(f"SHOW TABLES FROM {CATALOG_NAME}")
 
 
+@pytest.mark.parametrize("engine_clause", [" ENGINE = IcebergS3", ""])
+def test_create_without_engine_arguments_missing_database(started_cluster, engine_clause):
+    node = started_cluster.instances["node1"]
+
+    test_ref = f"test_create_without_engine_arguments_missing_database_{uuid.uuid4()}"
+    table_name = f"{test_ref}_table"
+    root_namespace = f"{test_ref}_namespace"
+
+    glue_client = boto3.client(
+        "glue", region_name="us-east-1", endpoint_url=get_glue_local_url(started_cluster)
+    )
+
+    create_clickhouse_glue_database(started_cluster, node, CATALOG_NAME)
+    for _ in range(2):
+        with pytest.raises(Exception) as exc:
+            node.query(
+                f"CREATE TABLE {CATALOG_NAME}.`{root_namespace}.{table_name}` (x String){engine_clause}",
+                settings={"allow_experimental_database_glue_catalog": 1},
+            )
+        assert "cannot tell where table" in str(exc.value), str(exc.value)
+
+    with pytest.raises(glue_client.exceptions.EntityNotFoundException):
+        glue_client.get_database(Name=root_namespace)
+
+
 def test_create_gzip_metadata(started_cluster):
     # Regression for issue #109801: a catalog-backed CREATE TABLE from ClickHouse
     # with gzip metadata compression exercises IcebergMetadata::createInitial and

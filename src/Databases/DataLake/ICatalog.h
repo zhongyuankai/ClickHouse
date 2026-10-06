@@ -275,6 +275,8 @@ public:
 
     virtual bool managesTableLocation() const { return false; }
 
+    virtual bool assignsLocationToNewNamespaces() const { return false; }
+
     /// True when the catalog writes the first metadata file itself on create. The client must not prewrite it.
     virtual bool writesInitialMetadata() const { return false; }
 
