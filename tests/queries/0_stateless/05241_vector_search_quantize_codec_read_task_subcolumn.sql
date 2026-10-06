@@ -32,11 +32,15 @@ SYSTEM FLUSH LOGS query_log;
 -- The codes take 68 bytes per row, the vector 256, so reading the full column instead would be at least as large.
 WITH
     (SELECT ProfileEvents['ReadCompressedBytes'] FROM system.query_log
-     WHERE current_database = currentDatabase() AND type = 'QueryFinish' AND log_comment = '05241_full') AS full
+     WHERE current_database = currentDatabase() AND event_date >= yesterday()
+       AND type = 'QueryFinish' AND log_comment = '05241_full'
+     ORDER BY event_time_microseconds DESC LIMIT 1) AS full
 SELECT log_comment, ProfileEvents['ReadCompressedBytes'] * 2 < full
 FROM system.query_log
-WHERE current_database = currentDatabase() AND type = 'QueryFinish' AND log_comment IN ('05241_codes', '05241_codes_prewhere')
-ORDER BY log_comment;
+WHERE current_database = currentDatabase() AND event_date >= yesterday()
+  AND type = 'QueryFinish' AND log_comment IN ('05241_codes', '05241_codes_prewhere')
+ORDER BY log_comment, event_time_microseconds DESC
+LIMIT 1 BY log_comment;
 
 DROP TABLE quantize_read_task;
 
