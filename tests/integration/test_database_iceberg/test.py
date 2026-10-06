@@ -1515,8 +1515,9 @@ def test_create_gzip_metadata(started_cluster):
     )
     assert node.query(f"SELECT * FROM {CATALOG_NAME}.`{root_namespace}.{table_name}`") == "AAPL\n"
 
-    # The initial metadata ClickHouse registered with the catalog must use the
-    # spec `gz` extension, and the catalog must point at the file that exists.
+    # The REST server writes the first metadata file itself. It must receive the
+    # `write.metadata.compression-codec` property so that it uses the spec `gz`
+    # extension, and later ClickHouse writes must follow the same codec.
     catalog = load_catalog_impl(started_cluster)
     metadata_location = catalog.load_table(f"{root_namespace}.{table_name}").metadata_location
     metadata_bucket, metadata_key = metadata_location[len("s3://"):].split("/", 1)
