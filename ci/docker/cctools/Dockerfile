@@ -48,12 +48,12 @@ RUN apt-get update \
         libgmp-dev \
         libmpfr-dev \
     && wget --waitretry 5 --retry-connrefused --retry-on-host-error --retry-on-http-error 403 --tries 10 https://mirrors.kernel.org/sourceware/gdb/releases/gdb-$GDB_VERSION.tar.xz \
-    && tar -xvf gdb-$GDB_VERSION.tar.gz \
+    && tar -xvf gdb-$GDB_VERSION.tar.xz \
     && cd gdb-$GDB_VERSION \
     && ./configure --prefix=/opt/gdb --with-separate-debug-dir=/usr/lib/debug \
     && make -j $(nproc) \
     && make install \
-    && rm -fr gdb-$GDB_VERSION gdb-$GDB_VERSION.tar.gz
+    && rm -fr gdb-$GDB_VERSION gdb-$GDB_VERSION.tar.xz
 
 # just in case
 RUN /opt/gdb/bin/gdb --version
