@@ -203,12 +203,13 @@ DROP TABLE IF EXISTS t_ttl_in_partition;
 -- table's TTL 100 days forward without touching them - so both parts are now shiftable by a provable
 -- +100 days. Materializing partition 0 alone must refresh only that partition's bounds and leave
 -- partition 1 with its old ones, i.e. the two must end up exactly 100 days apart.
+-- The difference is computed in `UTC`: in a server timezone with DST the 100-day gap can cross one day boundary less.
 CREATE TABLE t_ttl_in_partition (p UInt32, d DateTime('UTC')) ENGINE = MergeTree PARTITION BY p ORDER BY d
     TTL d + INTERVAL 300 DAY
     SETTINGS min_bytes_for_full_part_storage = 0;
 INSERT INTO t_ttl_in_partition SELECT number % 2, now('UTC') FROM numbers(1000);
 ALTER TABLE t_ttl_in_partition MODIFY TTL d + INTERVAL 400 DAY SETTINGS materialize_ttl_after_modify = 0;
 ALTER TABLE t_ttl_in_partition MATERIALIZE TTL IN PARTITION 0 SETTINGS mutations_sync = 2;
-SELECT dateDiff('day', min(delete_ttl_info_max), max(delete_ttl_info_max)) FROM system.parts
+SELECT dateDiff('day', min(delete_ttl_info_max), max(delete_ttl_info_max), 'UTC') FROM system.parts
 WHERE database = currentDatabase() AND table = 't_ttl_in_partition' AND active;
 DROP TABLE t_ttl_in_partition;
