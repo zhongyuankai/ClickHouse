@@ -57,6 +57,14 @@ void TTLDeleteAlgorithm::execute(Block & block)
             /// Update ttl info only if row passes the filter.
             /// Rows that don't pass the filter should not affect TTL.
             new_ttl_info.update(cur_ttl);
+
+            /// The constructor seeds `ttl_finished` from the old bounds, but a scanned part can still
+            /// hold a row with a live TTL - e.g. a part with epoch timestamps whose old bounds are
+            /// expired, rescanned after `MODIFY TTL`. Such a row has yet to expire, so the TTL is not
+            /// finished, or `updatePartMinMaxTTL` would ignore its bounds and no TTL merge would
+            /// ever remove it.
+            if (cur_ttl)
+                new_ttl_info.ttl_finished = false;
         }
     }
 
